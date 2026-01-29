@@ -1,0 +1,65 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model School {
+  id        String    @id @default(uuid())
+  name      String
+  users     User[]    //Admins and Instructors
+  students  Student[] 
+  createdAt DateTime  @default(now())
+}
+
+enum Role {
+  ADMIN
+  INSTRUCTOR
+  STUDENT
+}
+
+model User {
+  id       String   @id @default(uuid())
+  schoolId String
+  school   School   @relation(fields: [schoolId], references: [id])
+  fullName String?
+  email    String   @unique
+  password String
+  role     Role     @default(STUDENT)
+  balance  Decimal  @default(0.00)
+  
+  bookings        Booking[] @relation("StudentBookings")
+  lessons         Booking[] @relation("InstructorBookings")
+  studentManaged  Student[] @relation("InstructorStudents")
+  createdAt       DateTime  @default(now())
+}
+
+model Student {
+  id            String   @id @default(uuid())
+  fullName      String
+  email         String   @unique
+  phone         String   @unique
+  address       String?   
+  cnic          String?
+  status        String   @default("ENROLLED")  // ENROLLED, COMPLETED, DROPPED
+  balance       Float    @default(0)
+  school        School   @relation(fields: [schoolId], references: [id])
+  schoolId      String   
+  instructor    User?    @relation("InstructorStudents", fields: [instructorId], references: [id])
+  instructorId  String?
+  createdAt     DateTime  @default(now())
+}
+
+model Booking {
+  id           String   @id @default(uuid())
+  startTime    DateTime
+  endTime      DateTime
+  studentId    String
+  student      User     @relation("StudentBookings", fields: [studentId], references: [id])
+  instructorId String
+  instructor   User     @relation("InstructorBookings", fields: [instructorId], references: [id])
+  status       String   @default("CONFIRMED")
+}
