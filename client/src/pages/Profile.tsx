@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import axios from 'axios';
+import api from '../api/axios';
 import { FaLock, FaSave, FaIdCard, FaMapMarkerAlt, FaPhone, FaEnvelope } from 'react-icons/fa';
 
 export default function Profile() {
@@ -35,7 +35,7 @@ export default function Profile() {
 
   const fetchProfile = async () => {
     try {
-      const res = await axios.get(`http://localhost:5000/auth/user/${storedUser.id}`);
+      const res = await api.get(`/auth/user/${storedUser.id}`);
       setUser(res.data);
       setFormData({
         fullName: res.data.fullName || '',
@@ -53,7 +53,7 @@ export default function Profile() {
     e.preventDefault();
     setLoading(true);
     try {
-      await axios.put('http://localhost:5000/auth/update-profile', {
+      await api.put('/auth/update-profile', {
         userId: user.id,
         updates: {
           fullName: formData.fullName,
@@ -87,7 +87,7 @@ export default function Profile() {
     }
     
     try {
-      await axios.post('http://localhost:5000/auth/change-password', {
+      await api.post('/auth/change-password', {
         userId: user.id,
         current: securityData.currentPassword,
         new: securityData.newPassword

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import axios from 'axios';
+import api from '../api/axios';
 import { FaCalendarAlt, FaGoogle, FaApple, FaChevronDown, FaClock } from 'react-icons/fa';
 import { generateGoogleCalendarUrl, downloadIcsFile } from '../utils/calendarUtils';
 
@@ -11,7 +11,7 @@ export default function MyBookings() {
   useEffect(() => {
     const fetchBookings = async () => {
       try {
-        const res = await axios.get(`http://localhost:5000/booking/student/${user.id}`);
+        const res = await api.get(`/booking/student/${user.id}`);
         setBookings(res.data);
       } catch (error) { console.error(error); }
     };

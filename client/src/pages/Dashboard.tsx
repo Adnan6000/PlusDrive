@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import axios from 'axios';
+import api from '../api/axios';
 import BookingRequests from '../components/BookingRequests'; 
 import { FaUserGraduate, FaCalendarCheck, FaClock, FaClipboardList } from 'react-icons/fa';
 import { useNavigate } from 'react-router-dom';
@@ -18,7 +18,7 @@ export default function Dashboard() {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const res = await axios.get(`http://localhost:5000/booking/stats/${user.id}`);
+        const res = await api.get(`/booking/stats/${user.id}`);
         setStats(res.data);
       } catch (e) { console.error(e); }
     };

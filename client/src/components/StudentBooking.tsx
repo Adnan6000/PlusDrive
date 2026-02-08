@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
-import axios from 'axios';
+import api from '../api/axios';
 import { FaChalkboardTeacher, FaCalendarCheck, FaTimes, FaSync, FaInfoCircle } from 'react-icons/fa';
 
 export default function StudentBooking() {
@@ -21,7 +21,7 @@ export default function StudentBooking() {
   useEffect(() => {
     const fetchInstructors = async () => {
         try {
-            const res = await axios.get(`http://localhost:5000/auth/school-instructors/any`);
+            const res = await api.get(`/auth/school-instructors/any`);
             setInstructors(res.data);
             if(res.data.length > 0 && !selectedInstructor) {
               setSelectedInstructor(res.data[0].id);
@@ -39,7 +39,7 @@ export default function StudentBooking() {
   const fetchSlots = async () => {
     if (!selectedInstructor) return;
     try {
-        const res = await axios.get(`http://localhost:5000/availability/${selectedInstructor}`);
+        const res = await api.get(`/availability/${selectedInstructor}`);
         setSlots(res.data);
     } catch (e) { console.error("Slots fetch error", e); }
   };
@@ -93,7 +93,7 @@ export default function StudentBooking() {
   const submitBooking = async () => {
     if (!selectedSlot) return;
     try {
-      await axios.post('http://localhost:5000/booking/request', {
+      await api.post('/booking/request', {
         studentId: user.id,
         availabilityId: selectedSlot.id,
         type: 'Driving',

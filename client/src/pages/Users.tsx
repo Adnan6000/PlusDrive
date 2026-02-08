@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import axios from 'axios';
+import api from '../api/axios';
 import { FaSearch, FaPhone, FaEnvelope, FaCheckCircle, FaTimesCircle, FaEdit, FaSave, FaTimes } from 'react-icons/fa';
 
 export default function Users() {
@@ -19,7 +19,7 @@ export default function Users() {
 
   const fetchStudents = async () => {
     try {
-      const res = await axios.get('http://localhost:5000/auth/students');
+      const res = await api.get('/auth/students');
       setStudents(res.data);
     } catch (error) { 
       console.error("Failed to fetch students"); 
@@ -40,7 +40,7 @@ export default function Users() {
 
   const handleSave = async () => {
     try {
-      await axios.put('http://localhost:5000/auth/admin/update-user', {
+      await api.put('/auth/admin/update-user', {
         adminId: currentUser.id,
         targetUserId: editingUser.id,
         updates: formData

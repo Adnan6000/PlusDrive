@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import axios from 'axios';
+import api from '../api/axios';
 import { useSearchParams } from 'react-router-dom'; // To handle redirects
 import { FaPaperPlane, FaUserCircle, FaSearch, FaCommentDots } from 'react-icons/fa';
 
@@ -49,7 +49,7 @@ export default function Inbox() {
     const search = async () => {
        if (searchQuery.length > 2 && isInstructor) {
           try {
-             const res = await axios.get(`http://localhost:5000/auth/search-students?query=${searchQuery}`);
+             const res = await api.get(`/auth/search-students?query=${searchQuery}`);
              setSearchResults(res.data);
           } catch (e) { console.error(e); }
        } else {
@@ -62,14 +62,14 @@ export default function Inbox() {
 
   const fetchContacts = async () => {
     try {
-      const res = await axios.get(`http://localhost:5000/message/contacts/${user.id}`);
+      const res = await api.get(`/message/contacts/${user.id}`);
       setContacts(res.data);
     } catch (e) { console.error("Error fetching contacts"); }
   };
 
   const startChatWithUser = async (userId: string) => {
      try {
-        const res = await axios.get(`http://localhost:5000/auth/user/${userId}`);
+        const res = await api.get(`/auth/user/${userId}`);
         const targetUser = res.data;
         
         // Check if already in contacts, if not add temporarily
@@ -86,7 +86,7 @@ export default function Inbox() {
 
   const fetchMessages = async (otherId: string) => {
     try {
-      const res = await axios.get(`http://localhost:5000/message/history/${user.id}/${otherId}`);
+      const res = await api.get(`/message/history/${user.id}/${otherId}`);
       setMessages(res.data);
     } catch (e) { console.error("Error fetching messages"); }
   };
@@ -105,7 +105,7 @@ export default function Inbox() {
       setMessages([...messages, tempMsg]);
       setNewMessage('');
 
-      await axios.post('http://localhost:5000/message/send', {
+      await api.post('/message/send', {
         senderId: user.id,
         receiverId: activeChat.id,
         content: tempMsg.content

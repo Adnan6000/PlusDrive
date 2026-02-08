@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import axios from 'axios';
+import api from '../api/axios';
 import { FaCheck, FaTimes, FaUserClock, FaCalendarAlt, FaClock } from 'react-icons/fa';
 
 export default function BookingRequests() {
@@ -13,7 +13,7 @@ export default function BookingRequests() {
 
   const fetchRequests = async () => {
     try {
-      const res = await axios.get(`http://localhost:5000/booking/pending/${user.id}`);
+      const res = await api.get(`/booking/pending/${user.id}`);
       setRequests(res.data);
       setLoading(false);
     } catch (error) { console.error("Error fetching requests", error); }
@@ -27,7 +27,7 @@ export default function BookingRequests() {
     if (!confirm(confirmMsg)) return;
 
     try {
-      await axios.put('http://localhost:5000/booking/status', { bookingId: id, action });
+      await api.put('/booking/status', { bookingId: id, action });
       alert(action === 'CONFIRMED' ? "Booking Confirmed!" : "Booking Rejected.");
       fetchRequests(); // Refresh list immediately
     } catch (error) { alert("Action failed"); }

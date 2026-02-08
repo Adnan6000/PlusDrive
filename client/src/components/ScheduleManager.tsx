@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
-import axios from 'axios';
+import api from '../api/axios';
 // FIX: Removed unused FaCheckCircle
 import { FaClock, FaToggleOn, FaToggleOff } from 'react-icons/fa';
 
@@ -18,14 +18,14 @@ export default function ScheduleManager() {
 
   const fetchBookings = async () => {
     try {
-      const res = await axios.get(`http://localhost:5000/booking/${user.id}`);
+      const res = await api.get(`/booking/${user.id}`);
       setBookings(res.data);
     } catch (error) { console.error(error); }
   };
 
   const fetchSettings = async () => {
     try {
-      const res = await axios.get(`http://localhost:5000/auth/user/${user.id}`);
+      const res = await api.get(`/auth/user/${user.id}`);
       setAutoConfirm(res.data.autoConfirm || false);
     } catch (error) { console.error(error); }
   };
@@ -34,7 +34,7 @@ export default function ScheduleManager() {
     const newValue = !autoConfirm;
     setAutoConfirm(newValue);
     try {
-      await axios.put('http://localhost:5000/auth/update-profile', {
+      await api.put('/auth/update-profile', {
         userId: user.id,
         updates: { autoConfirm: newValue }
       });

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import axios from 'axios';
+import api from '../api/axios';
 import { useTranslation } from 'react-i18next';
 import { FaCalendarCheck } from 'react-icons/fa';
 
@@ -11,7 +11,7 @@ export default function HomeDashboard() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const res = await axios.get(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/dashboard/summary/${user.id}`);
+        const res = await api.get(`${import.meta.env.VITE_API_URL || ''}/dashboard/summary/${user.id}`);
         setData(res.data);
       } catch (error) { console.error("Dashboard error", error); }
     };

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import axios from 'axios';
+import api from '../api/axios';
 import { FaVideo, FaTrash, FaPlus, FaBookOpen } from 'react-icons/fa';
 
 export default function Theory({ type }: { type: string }) {
@@ -18,7 +18,7 @@ export default function Theory({ type }: { type: string }) {
 
   const fetchLessons = async () => {
     try {
-      const res = await axios.get(`http://localhost:5000/lesson/${type}`);
+      const res = await api.get(`/lesson/${type}`);
       setLessons(res.data);
     } catch (e) { console.error(e); }
   };
@@ -26,7 +26,7 @@ export default function Theory({ type }: { type: string }) {
   const handleSubmit = async (e: any) => {
     e.preventDefault();
     try {
-      await axios.post('http://localhost:5000/lesson', { ...formData, category: type });
+      await api.post('/lesson', { ...formData, category: type });
       setShowForm(false);
       setFormData({ title: '', content: '', videoUrl: '' });
       fetchLessons();
@@ -36,7 +36,7 @@ export default function Theory({ type }: { type: string }) {
   const handleDelete = async (id: string) => {
     if(!confirm("Delete this lesson?")) return;
     try {
-      await axios.delete(`http://localhost:5000/lesson/${id}`);
+      await api.delete(`/lesson/${id}`);
       fetchLessons();
     } catch (e) { alert("Failed to delete"); }
   };

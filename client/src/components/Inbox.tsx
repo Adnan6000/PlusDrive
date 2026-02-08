@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../api/axios';
 import { FaPaperPlane, FaSearch, FaUserCircle, FaChalkboardTeacher, FaUserGraduate } from 'react-icons/fa';
 
 interface Message {
@@ -32,7 +32,7 @@ export default function Inbox() {
 
   const fetchInbox = async () => {
     try {
-      const res = await axios.get(`http://localhost:5000/messages/inbox/${user.id}`);
+      const res = await api.get(`/messages/inbox/${user.id}`);
       let contacts = res.data;
       setInboxList(contacts);
 
@@ -47,7 +47,7 @@ export default function Inbox() {
             setSelectedContact(instructor);
          } else {
             // No history? Fetch instructor details manually
-            const schoolRes = await axios.get(`http://localhost:5000/auth/school-instructors/${user.schoolId}`);
+            const schoolRes = await api.get(`/auth/school-instructors/${user.schoolId}`);
             if (schoolRes.data.length > 0) {
                  const newInst = schoolRes.data[0];
                  const dummyContact = {
@@ -72,7 +72,7 @@ export default function Inbox() {
   const fetchConversation = async () => {
     if (!selectedContact) return;
     try {
-        const res = await axios.get(`http://localhost:5000/messages/conversation/${user.id}/${selectedContact.id}`);
+        const res = await api.get(`/messages/conversation/${user.id}/${selectedContact.id}`);
         setConversation(res.data);
     } catch (error) { console.error(error); }
   };
@@ -82,7 +82,7 @@ export default function Inbox() {
     if (!reply.trim() || !selectedContact) return;
 
     try {
-        await axios.post('http://localhost:5000/messages/send', {
+        await api.post('/messages/send', {
           senderId: user.id,
           receiverId: selectedContact.id,
           content: reply,

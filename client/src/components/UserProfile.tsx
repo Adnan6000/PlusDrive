@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../api/axios';
 import { FaMoon, FaSun, FaGlobe, FaCheckCircle, FaExclamationCircle } from 'react-icons/fa';
 
 export default function UserProfile() {
@@ -33,7 +33,7 @@ export default function UserProfile() {
     const fetchProfile = async () => {
       if (!user.id) return;
       try {
-        const res = await axios.get(`http://localhost:5000/auth/user/${user.id}`);
+        const res = await api.get(`/auth/user/${user.id}`);
         // Merge fetched data with existing state to avoid overwriting defaults
         setFormData(prev => ({ ...prev, ...res.data }));
       } catch (error) {
@@ -48,7 +48,7 @@ export default function UserProfile() {
     e.preventDefault();
     setLoading(true);
     try {
-      await axios.put('http://localhost:5000/auth/update-profile', {
+      await api.put('/auth/update-profile', {
         userId: user.id,
         updates: formData
       });
@@ -71,7 +71,7 @@ export default function UserProfile() {
     if (passData.new !== passData.confirm) return alert("New passwords do not match!");
     
     try {
-      await axios.post('http://localhost:5000/auth/change-password', {
+      await api.post('/auth/change-password', {
         userId: user.id,
         current: passData.current,
         new: passData.new
@@ -86,7 +86,7 @@ export default function UserProfile() {
   // 4. SEND VERIFICATION EMAIL
   const sendConfirmation = async () => {
     try {
-      await axios.post('http://localhost:5000/auth/resend-verification', { email: formData.email });
+      await api.post('/auth/resend-verification', { email: formData.email });
       alert(`Verification link sent to ${formData.email}`);
     } catch (e) { 
       alert("Failed to send verification link. Please try again later."); 

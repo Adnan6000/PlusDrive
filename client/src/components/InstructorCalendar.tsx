@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
-import axios from 'axios';
+import api from '../api/axios';
 import { FaTrash, FaPlus, FaToggleOn, FaToggleOff, FaGoogle, FaApple } from 'react-icons/fa';
 import { generateGoogleCalendarUrl, downloadIcsFile } from '../utils/calendarUtils';
 
@@ -23,16 +23,16 @@ export default function InstructorCalendar() {
 
   const fetchData = async () => {
     try {
-      const slotRes = await axios.get(`http://localhost:5000/availability/${user.id}`);
+      const slotRes = await api.get(`/availability/${user.id}`);
       setSlots(slotRes.data);
-      const bookingRes = await axios.get(`http://localhost:5000/booking/${user.id}`);
+      const bookingRes = await api.get(`/booking/${user.id}`);
       setBookings(bookingRes.data.filter((b: any) => b.status === 'CONFIRMED'));
     } catch (e) { console.error(e); }
   };
 
   const fetchSettings = async () => {
     try {
-      const res = await axios.get(`http://localhost:5000/auth/user/${user.id}`); 
+      const res = await api.get(`/auth/user/${user.id}`); 
       setAutoConfirm(res.data.autoConfirm || false);
     } catch (error) { console.error(error); }
   };
@@ -41,7 +41,7 @@ export default function InstructorCalendar() {
     const newValue = !autoConfirm;
     setAutoConfirm(newValue);
     try {
-      await axios.put('http://localhost:5000/auth/update-profile', {
+      await api.put('/auth/update-profile', {
         userId: user.id,
         updates: { autoConfirm: newValue }
       });
@@ -70,7 +70,7 @@ export default function InstructorCalendar() {
     }
 
     try {
-      await axios.post('http://localhost:5000/availability/add', {
+      await api.post('/availability/add', {
         adminId: user.id, date: date, startTime: startTime, endTime: endTime 
       });
       fetchData();
@@ -81,7 +81,7 @@ export default function InstructorCalendar() {
   const deleteSlot = async (id: string) => {
     if (!confirm("Delete this slot?")) return;
     try {
-      await axios.delete(`http://localhost:5000/availability/${id}`);
+      await api.delete(`/availability/${id}`);
       fetchData();
     } catch (error) { alert("Cannot delete a booked slot!"); }
   };

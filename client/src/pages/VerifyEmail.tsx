@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import api from '../api/axios';
 import { FaCheckCircle, FaTimesCircle, FaSpinner } from 'react-icons/fa';
 
 export default function VerifyEmail() {
@@ -24,7 +24,7 @@ export default function VerifyEmail() {
   const verifyAccount = async () => {
     try {
       // Make sure this endpoint matches your backend AuthController
-      await axios.post('http://localhost:5000/auth/verify-email', { token });
+      await api.post('/auth/verify-email', { token });
       setStatus('success');
       setMessage('Account verified successfully! Redirecting to login...');
       

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../api/axios';
 import { FaPlayCircle, FaFilePdf, FaCheckCircle, FaLock, FaTrash, FaPlus, FaCloudUploadAlt, FaCar, FaMotorcycle } from 'react-icons/fa';
 
 interface TheoryProps {
@@ -24,7 +24,7 @@ export default function TheoryLibrary({ category, type }: TheoryProps) {
 
   const fetchContent = async () => {
     try {
-      const res = await axios.get(`http://localhost:5000/theory/${category}`);
+      const res = await api.get(`/theory/${category}`);
       const filtered = res.data.filter((i: any) => 
         type === 'TESTS' ? i.type === 'TEST' : (i.type === 'VIDEO' || i.type === 'PDF')
       );
@@ -35,7 +35,7 @@ export default function TheoryLibrary({ category, type }: TheoryProps) {
   const handleAdd = async () => {
     const finalUrl = newItem.file ? URL.createObjectURL(newItem.file) : newItem.url;
 
-    await axios.post('http://localhost:5000/theory/add', {
+    await api.post('/theory/add', {
       title: newItem.title,
       url: finalUrl,
       isFree: newItem.isFree,
@@ -50,7 +50,7 @@ export default function TheoryLibrary({ category, type }: TheoryProps) {
 
   const handleDelete = async (id: string) => {
     if(confirm("Delete this item?")) {
-      await axios.delete(`http://localhost:5000/theory/${id}`);
+      await api.delete(`/theory/${id}`);
       fetchContent();
     }
   };

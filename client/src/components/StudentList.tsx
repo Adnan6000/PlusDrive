@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import axios from 'axios';
+import api from '../api/axios';
 import { FaHistory, FaPaperPlane, FaMoneyBillWave, FaTimes } from 'react-icons/fa';
 
 export default function StudentList() {
@@ -24,7 +24,7 @@ export default function StudentList() {
 
   const fetchStudents = async () => {
     try {
-      const res = await axios.get(`http://localhost:5000/auth/students/${user.schoolId}`);
+      const res = await api.get(`/auth/students/${user.schoolId}`);
       setStudents(Array.isArray(res.data) ? res.data : []);
     } catch (error) { console.error(error); }
   };
@@ -35,7 +35,7 @@ export default function StudentList() {
   const handleViewHistory = async () => {
     if (!selectedStudent) return;
     try {
-      const res = await axios.get(`http://localhost:5000/booking/student/${selectedStudent.id}`);
+      const res = await api.get(`/booking/student/${selectedStudent.id}`);
       setHistory(res.data);
       setShowHistory(true);
     } catch (error) { alert("Could not fetch history"); }
@@ -45,7 +45,7 @@ export default function StudentList() {
   const handleSendMessage = async () => {
     if (!selectedStudent) return;
     try {
-      await axios.post('http://localhost:5000/messages/send', {
+      await api.post('/messages/send', {
         senderId: user.id,
         receiverId: selectedStudent.id,
         subject: 'Instructor Message',
@@ -56,7 +56,7 @@ export default function StudentList() {
       setMsgContent('');
     } catch (error) { 
       console.error(error);
-      const errorMessage = axios.isAxiosError(error) ? (error.response?.data?.message || 'Internal Error') : 'Internal Error';
+      const errorMessage = api.isAxiosError(error) ? (error.response?.data?.message || 'Internal Error') : 'Internal Error';
       alert("Failed to send: " + errorMessage);
      }
   };
@@ -65,7 +65,7 @@ export default function StudentList() {
   const handleAddFunds = async () => {
     if (!selectedStudent || !payAmount) return;
     try {
-      await axios.post('http://localhost:5000/finance/add-funds', {
+      await api.post('/finance/add-funds', {
         studentId: selectedStudent.id,
         amount: payAmount,
         description: 'Cash Payment / Deposit'

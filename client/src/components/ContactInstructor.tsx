@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import axios from 'axios';
+import api from '../api/axios';
 
 export default function ContactInstructor() {
   const user = JSON.parse(localStorage.getItem('user') || '{}');
@@ -8,7 +8,7 @@ export default function ContactInstructor() {
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await axios.post('http://localhost:5000/messages/send', {
+      await api.post('/messages/send', {
         senderId: user.id,
         receiverId: user.schoolId, // In this logic, the message goes to the school owner
         ...msg

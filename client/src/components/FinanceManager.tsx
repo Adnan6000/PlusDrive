@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import axios from 'axios';
+import api from '../api/axios';
 import { FaArrowDown, FaArrowUp, FaSearch, FaFileInvoiceDollar } from 'react-icons/fa';
 
 interface Transaction {
@@ -25,10 +25,10 @@ export default function FinanceManager() {
     try {
       // Endpoint depends on role
       const endpoint = user.role === 'ADMIN' 
-        ? `http://localhost:5000/finance/school/${user.schoolId}` // Instructor sees all
-        : `http://localhost:5000/finance/student/${user.id}`;     // Student sees own
+        ? `/finance/school/${user.schoolId}` // Instructor sees all
+        : `/finance/student/${user.id}`;     // Student sees own
 
-      const res = await axios.get(endpoint);
+      const res = await api.get(endpoint);
       setTransactions(Array.isArray(res.data) ? res.data : []);
     } catch (error) {
       console.error("Error fetching finance history", error);
