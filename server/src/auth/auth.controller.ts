@@ -1,49 +1,64 @@
-import { Controller, Post, Body, HttpCode, HttpStatus, Get, Param, Delete, Patch } from '@nestjs/common';
+import { Controller, Post, Body, Get, Param, Put, BadRequestException, Query } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { CreateAuthDto } from './dto/create-auth.dto';
-import { LoginDto } from './dto/login.dto'; // We will create this next
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) { }
+  constructor(private readonly authService: AuthService) {}
 
   @Post('register')
-  create(@Body() createAuthDto: CreateAuthDto) {
-    return this.authService.register(createAuthDto);
+  register(@Body() body: any) {
+    return this.authService.register(body);
   }
 
-  @HttpCode(HttpStatus.OK)
   @Post('login')
-  signIn(@Body() signInDto: Record<string, any>) {
-    return this.authService.login(signInDto.email, signInDto.password);
+  login(@Body() body: any) {
+    return this.authService.login(body.email, body.password);
   }
 
-  @Post('add-instructor')
-  addInstructor(@Body() data: { fullName: string, email: string, schoolId: string }) {
-    return this.authService.addInstructor(data);
+  @Post('verify-email')
+  verifyEmail(@Body() body: { token: string }) {
+    if (!body.token) throw new BadRequestException("Token is required");
+    return this.authService.verifyEmail(body.token);
   }
 
-  @Get('instructors/:schoolId')
-  getInstructors(@Param('schoolId') schoolId: string) {
+  @Post('forgot-password')
+  forgotPassword(@Body('email') email: string) {
+    return this.authService.requestPasswordReset(email);
+  }
+
+  @Post('reset-password')
+  resetPassword(@Body() body: { token: string, newPassword: string }) {
+    return this.authService.performPasswordReset(body.token, body.newPassword);
+  }
+
+  @Put('update-profile')
+  updateProfile(@Body() body: { userId: string, updates: any }) {
+    return this.authService.updateProfile(body.userId, body.updates);
+  }
+
+  // FIX: Use the service method instead of direct Prisma call
+  @Get('school-instructors/:schoolId')
+  async getSchoolInstructors(@Param('schoolId') schoolId: string) {
     return this.authService.getInstructors(schoolId);
   }
-
-  @Delete('instructor/:id')
-  remove(@Param('id') id: string) {
-    return this.authService.deleteInstructor(id);
-  }
-  @Patch('instructor/:id')
-  update(@Param('id') id: string, @Body() data: { fullName?: string, email?: string }) {
-  return this.authService.updateInstructor(id, data);
-  }
   
-  @Post('add-student')
-  addStudent(@Body() data: { fullName: string, email: string, phone: string, schoolId: string }) {
-    return this.authService.addStudent(data);
+  @Get('user/:userId')
+  async getUser(@Param('userId') userId: string) {
+      return this.authService.getUserProfile(userId);
   }
 
-  @Get('students/:schoolId')
-  getStudents(@Param('schoolId') schoolId: string) {
-    return this.authService.getStudents(schoolId);
+  @Get('students')
+  async getStudents() {
+    return this.authService.getAllStudents();
   }
+
+  @Put('admin/update-user')
+  async adminUpdateUser(@Body() body: { adminId: string, targetUserId: string, updates: any }) {
+    return this.authService.updateUserByAdmin(body.adminId, body.targetUserId, body.updates);
+  }
+  @Get('search-students')
+  async searchStudents(@Query('query') query: string) {
+  if (!query) return [];
+    return this.authService.searchStudents(query);
+}
 }

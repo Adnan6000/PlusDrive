@@ -7,59 +7,100 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model School {
-  id        String    @id @default(uuid())
-  name      String
-  users     User[]    //Admins and Instructors
-  students  Student[] 
-  createdAt DateTime  @default(now())
-}
-
-enum Role {
-  ADMIN
-  INSTRUCTOR
-  STUDENT
-}
-
 model User {
-  id       String   @id @default(uuid())
-  schoolId String
-  school   School   @relation(fields: [schoolId], references: [id])
-  fullName String?
-  email    String   @unique
-  password String
-  role     Role     @default(STUDENT)
-  balance  Decimal  @default(0.00)
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  fullName  String
   
-  bookings        Booking[] @relation("StudentBookings")
-  lessons         Booking[] @relation("InstructorBookings")
-  studentManaged  Student[] @relation("InstructorStudents")
-  createdAt       DateTime  @default(now())
+  // FIX: Added missing 'surname' field
+  surname   String?
+  
+  role      String   @default("STUDENT") 
+  
+  // Settings & Profile
+  autoConfirm     Boolean @default(false)
+  phone           String?
+  address         String?
+  city            String?    // Added for completeness
+  zipCode         String?    // Added for completeness
+  country         String?  @default("Denmark")
+  
+  // Authentication & Access
+  isVerified      Boolean  @default(false)
+  verificationToken String?
+  resetToken      String?
+  resetTokenExpiry DateTime?
+  hasTheoryAccess Boolean  @default(false)
+
+  // Relations
+  schoolId         String?
+  school           School?       @relation(fields: [schoolId], references: [id])
+  bookings         Booking[]     @relation("StudentBookings")
+  adminBookings    Booking[]     @relation("AdminBookings")
+  availabilities   Availability[] 
+  sentMessages     Message[]     @relation("SentMessages")
+  receivedMessages Message[]     @relation("ReceivedMessages")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
-model Student {
-  id            String   @id @default(uuid())
-  fullName      String
-  email         String   @unique
-  phone         String   @unique
-  address       String?   
-  cnic          String?
-  status        String   @default("ENROLLED")  // ENROLLED, COMPLETED, DROPPED
-  balance       Float    @default(0)
-  school        School   @relation(fields: [schoolId], references: [id])
-  schoolId      String   
-  instructor    User?    @relation("InstructorStudents", fields: [instructorId], references: [id])
-  instructorId  String?
-  createdAt     DateTime  @default(now())
+model Availability {
+  id        String   @id @default(uuid())
+  adminId   String
+  date      DateTime
+  startTime String   
+  endTime   String   
+  isBooked  Boolean  @default(false)
+  
+  admin     User     @relation(fields: [adminId], references: [id])
 }
 
 model Booking {
-  id           String   @id @default(uuid())
-  startTime    DateTime
-  endTime      DateTime
-  studentId    String
-  student      User     @relation("StudentBookings", fields: [studentId], references: [id])
-  instructorId String
-  instructor   User     @relation("InstructorBookings", fields: [instructorId], references: [id])
-  status       String   @default("CONFIRMED")
+  id        String   @id @default(uuid())
+  status    String   @default("PENDING") 
+  date      DateTime
+  startTime String
+  endTime   String
+  type      String   @default("Driving")
+  attendance String  @default("PENDING") 
+  note       String?
+
+  studentId String
+  student   User     @relation("StudentBookings", fields: [studentId], references: [id])
+  
+  adminId   String
+  admin     User     @relation("AdminBookings", fields: [adminId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+model School {
+  id        String   @id @default(uuid())
+  name      String
+  users     User[]
+}
+
+model Message {
+  id        String   @id @default(uuid())
+  content   String
+  
+  senderId  String
+  sender    User     @relation("SentMessages", fields: [senderId], references: [id])
+  
+  receiverId String
+  receiver   User    @relation("ReceivedMessages", fields: [receiverId], references: [id])
+  
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model Lesson {
+  id        String   @id @default(uuid())
+  title     String
+  content   String   // Description or study notes
+  videoUrl  String?  // YouTube link
+  category  String   // "Car" or "Motorcycle"
+  createdAt DateTime @default(now())
 }
