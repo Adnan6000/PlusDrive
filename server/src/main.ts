@@ -6,7 +6,7 @@ async function bootstrap() {
   
   app.enableCors({
     // CRITICAL FIX: Allow Frontend (Port 5173) to talk to Backend
-    origin: 'http://localhost:5173',
+    origin: '*',
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
   });
