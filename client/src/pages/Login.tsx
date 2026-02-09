@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import api from './api/axios';
+import api from '../api/axios'; // ✅ FIX: Points back to src/api/axios.ts
 import { useNavigate, Link } from 'react-router-dom';
 
 export default function Login() {
@@ -21,7 +21,6 @@ export default function Login() {
       localStorage.setItem('access_token', res.data.access_token);
       localStorage.setItem('user', JSON.stringify(res.data.user));
 
-      // NEW CODE - Matches your Database Value
       if (res.data.user.role === 'INSTRUCTOR' || res.data.user.role === 'ADMIN') {
         navigate('/dashboard');
       } else {
@@ -42,9 +41,7 @@ export default function Login() {
 
         <form onSubmit={handleLogin} className="space-y-4">
           <div>
-            {/* FIX: Added htmlFor */}
             <label htmlFor="email" className="block text-sm font-bold text-slate-600 mb-1">Email</label>
-            {/* FIX: Added id */}
             <input
               id="email"
               type="email"
@@ -56,9 +53,7 @@ export default function Login() {
           </div>
 
           <div>
-            {/* FIX: Added htmlFor */}
             <label htmlFor="password" className="block text-sm font-bold text-slate-600 mb-1">Password</label>
-            {/* FIX: Added id */}
             <input
               id="password"
               type="password"

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import api from '../api/axios';
+import api from '../api/axios'; // Your local instance
 import { FaHistory, FaPaperPlane, FaMoneyBillWave, FaTimes } from 'react-icons/fa';
+import axios from 'axios'; // ✅ FIX: Import the REAL axios library for types/errors
 
 export default function StudentList() {
   const [students, setStudents] = useState<any[]>([]);
@@ -31,7 +32,6 @@ export default function StudentList() {
 
   // --- ACTIONS ---
 
-  // 1. VIEW HISTORY
   const handleViewHistory = async () => {
     if (!selectedStudent) return;
     try {
@@ -41,7 +41,6 @@ export default function StudentList() {
     } catch (error) { alert("Could not fetch history"); }
   };
 
-  // 2. SEND MESSAGE
   const handleSendMessage = async () => {
     if (!selectedStudent) return;
     try {
@@ -56,12 +55,12 @@ export default function StudentList() {
       setMsgContent('');
     } catch (error) { 
       console.error(error);
-      const errorMessage = api.isAxiosError(error) ? (error.response?.data?.message || 'Internal Error') : 'Internal Error';
+      // ✅ FIX: This now uses the library import, not your local file
+      const errorMessage = axios.isAxiosError(error) ? (error.response?.data?.message || 'Internal Error') : 'Internal Error';
       alert("Failed to send: " + errorMessage);
      }
   };
 
-  // 3. ADD FUNDS (Manual Payment)
   const handleAddFunds = async () => {
     if (!selectedStudent || !payAmount) return;
     try {
@@ -72,7 +71,6 @@ export default function StudentList() {
       });
       alert("Funds Added Successfully!");
 
-      // Refresh list to show new balance
       fetchStudents();
       setStudents(prevStudents =>
         prevStudents.map(s =>
@@ -82,9 +80,8 @@ export default function StudentList() {
         )
       );
 
-      // 2. Updated the currently selected student (Safe Update)
       setSelectedStudent((prev: any) => {
-        if (!prev) return null; // Safety check
+        if (!prev) return null;
         return { ...prev, balance: prev.balance + parseFloat(payAmount) };
       });
 
@@ -100,7 +97,6 @@ export default function StudentList() {
 
   return (
     <div className="bg-white border border-slate-200 rounded-sm shadow-sm min-h-[600px] flex">
-
       {/* LIST COLUMN */}
       <div className="w-1/3 border-r border-slate-200 flex flex-col">
         <div className="p-4 border-b border-slate-200 bg-slate-50">
@@ -128,7 +124,6 @@ export default function StudentList() {
       <div className="w-2/3 p-8 bg-slate-50/50 relative">
         {selectedStudent ? (
           <div>
-            {/* HEADER */}
             <div className="flex justify-between items-start mb-6 border-b pb-6">
               <div>
                 <h2 className="text-3xl font-bold text-slate-700">{selectedStudent.fullName}</h2>
@@ -149,7 +144,6 @@ export default function StudentList() {
               </div>
             </div>
 
-            {/* INFO GRID */}
             <div className="grid grid-cols-2 gap-6 mb-8">
               <div className="bg-white p-4 border border-slate-200 rounded shadow-sm">
                 <p className="text-xs text-slate-400 uppercase font-bold mb-1">Contact</p>
@@ -163,7 +157,6 @@ export default function StudentList() {
               </div>
             </div>
 
-            {/* ACTION BUTTONS (NOW WORKING) */}
             <div className="flex gap-4">
               <button
                 onClick={handleViewHistory}
@@ -185,9 +178,7 @@ export default function StudentList() {
           </div>
         )}
 
-        {/* --- MODALS --- */}
-
-        {/* 1. HISTORY MODAL */}
+        {/* MODALS */}
         {showHistory && (
           <div className="absolute inset-0 bg-white z-10 p-6 overflow-y-auto animate-fadeIn">
             <div className="flex justify-between items-center mb-4">
@@ -212,7 +203,6 @@ export default function StudentList() {
           </div>
         )}
 
-        {/* 2. MESSAGE MODAL */}
         {showMsgModal && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
             <div className="bg-white p-6 rounded-lg w-96 shadow-xl">
@@ -231,7 +221,6 @@ export default function StudentList() {
           </div>
         )}
 
-        {/* 3. ADD FUNDS MODAL */}
         {showPayModal && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
             <div className="bg-white p-6 rounded-lg w-80 shadow-xl">
@@ -255,7 +244,6 @@ export default function StudentList() {
             </div>
           </div>
         )}
-
       </div>
     </div>
   );
