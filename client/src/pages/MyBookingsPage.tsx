@@ -17,6 +17,23 @@ export default function StudentBooking() {
   
   const user = JSON.parse(localStorage.getItem('user') || '{}');
 
+  // ✅ FIX 1: Robust Display Helper
+  // We add 12 hours to the incoming date. This fixes the issue where the backend 
+  // sends "Previous Day 19:00 UTC" for a "Current Day" slot.
+  const fixDateDisplay = (dateString: string) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    
+    // Add 12 hours (in milliseconds) buffer
+    const bufferedDate = new Date(date.getTime() + (12 * 60 * 60 * 1000));
+
+    return bufferedDate.toLocaleDateString('en-GB', { 
+      day: 'numeric',
+      month: 'short', 
+      year: 'numeric'
+    }); 
+  };
+
   // 1. Fetch Instructors
   useEffect(() => {
     const fetchInstructors = async () => {
@@ -46,14 +63,25 @@ export default function StudentBooking() {
     } catch (e) { console.error("Slots fetch error", e); }
   };
 
-  // 3. DATE MATCHING
+  // ✅ FIX 2: Updated Logic to match slots to the correct day
   const isSameDay = (calendarDate: Date, apiDateString: string) => {
     if (!apiDateString) return false;
+    
+    // Create Date object from API string
+    const apiDate = new Date(apiDateString);
+    
+    // Add the same 12-hour buffer so the grid placement matches the display
+    const bufferedApiDate = new Date(apiDate.getTime() + (12 * 60 * 60 * 1000));
+    
+    // Compare Local Calendar Date vs Buffered API Date
     const year = calendarDate.getFullYear();
     const month = String(calendarDate.getMonth() + 1).padStart(2, '0');
     const day = String(calendarDate.getDate()).padStart(2, '0');
     const localDateString = `${year}-${month}-${day}`;
-    const apiDateLocal = apiDateString.split('T')[0]; 
+    
+    // Extract YYYY-MM-DD from the buffered date
+    const apiDateLocal = bufferedApiDate.toISOString().split('T')[0]; 
+    
     return localDateString === apiDateLocal;
   };
 
@@ -180,7 +208,6 @@ export default function StudentBooking() {
             <div className="flex justify-between items-center mb-6 border-b pb-4">
               <h3 className="text-xl font-bold text-slate-800">Confirm Booking</h3>
               
-              {/* FIX: Added aria-label to fix the error */}
               <button 
                 onClick={() => setShowModal(false)} 
                 className="p-2 hover:bg-slate-100 rounded-full transition"
@@ -195,7 +222,8 @@ export default function StudentBooking() {
               <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 flex justify-between items-center">
                  <div>
                     <p className="text-xs font-bold text-blue-600 uppercase tracking-wider">Date</p>
-                    <p className="text-slate-700 font-semibold">{new Date(selectedSlot.date).toDateString()}</p>
+                    {/* ✅ FIX: Using the improved helper function here */}
+                    <p className="text-slate-700 font-semibold">{fixDateDisplay(selectedSlot.date)}</p>
                  </div>
                  <div className="text-right">
                     <p className="text-xs font-bold text-blue-600 uppercase tracking-wider">Time</p>
