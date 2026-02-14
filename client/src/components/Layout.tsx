@@ -66,7 +66,7 @@ export default function Layout() {
       `}>
         <div className="p-6 border-b border-slate-800 flex justify-between items-center">
           <div>
-            <h1 className="text-xl font-bold tracking-wider text-blue-400">PlusDrive</h1>
+            <h1 className="text-xl font-bold tracking-wider text-blue-400">DriveBook</h1>
             <div className="flex items-center gap-2 mt-2">
                <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
                <p className="text-[10px] text-slate-400 uppercase tracking-widest">

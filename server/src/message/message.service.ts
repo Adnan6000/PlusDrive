@@ -23,7 +23,7 @@ export class MessageService {
           await this.notif.sendEmail(
             receiver.email,
             `New Message from ${sender.fullName}`,
-            `Hello ${receiver.fullName},\n\n${sender.fullName} sent you a message:\n\n"${content}"\n\nLog in to PlusDrive to reply.`
+            `Hello ${receiver.fullName},\n\n${sender.fullName} sent you a message:\n\n"${content}"\n\nLog in to DriveBook to reply.`
           );
        }
     }

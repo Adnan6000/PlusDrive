@@ -44,9 +44,9 @@ export const downloadIcsFile = (event: any) => {
 
   const icsContent = `BEGIN:VCALENDAR
 VERSION:2.0
-PRODID:-//PlusDrive//Driving School//EN
+PRODID:-//DriveBook//Driving School//EN
 BEGIN:VEVENT
-UID:${Date.now()}@plusdrive.com
+UID:${Date.now()}@drivebook.com
 DTSTAMP:${formatTime(new Date())}
 DTSTART:${formatTime(start)}
 DTEND:${formatTime(end)}

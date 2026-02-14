@@ -32,7 +32,7 @@ export class NotificationService {
     await this.sendEmail(
       email, 
       "Verify Account", 
-      `Welcome to PlusDrive! \n\nPlease click the link below to verify your account:\n${link}`
+      `Welcome to DriveBook! \n\nPlease click the link below to verify your account:\n${link}`
     );
   }
 

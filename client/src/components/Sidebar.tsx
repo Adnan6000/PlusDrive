@@ -122,7 +122,7 @@ export default function Sidebar({ activeTab, setActiveTab, userRole }: SidebarPr
 
       <div className="p-6 mt-auto opacity-50">
          <p className="text-[10px] text-slate-500 uppercase">Powered by</p>
-         <h4 className="text-white font-bold tracking-widest">PlusDrive</h4>
+         <h4 className="text-white font-bold tracking-widest">DriveBook</h4>
       </div>
     </div>
   );

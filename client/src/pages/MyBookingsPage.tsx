@@ -59,7 +59,7 @@ export default function StudentBooking() {
     const isoStart = `${yyyy}${mm}${dd}T${startSimple}`;
     const isoEnd = `${yyyy}${mm}${dd}T${endSimple}`;
 
-    return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=Driving+Lesson&dates=${isoStart}/${isoEnd}&details=Driving+Lesson+with+PlusDrive`;
+    return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=Driving+Lesson&dates=${isoStart}/${isoEnd}&details=Driving+Lesson+with+DriveBook`;
   };
 
   // HELPER: Generate .ics (Apple/Outlook) File
@@ -78,7 +78,7 @@ BEGIN:VEVENT
 SUMMARY:Driving Lesson
 DTSTART;TZID=Asia/Karachi:${yyyy}${mm}${dd}T${startSimple}
 DTEND;TZID=Asia/Karachi:${yyyy}${mm}${dd}T${endSimple}
-DESCRIPTION:Driving Lesson with PlusDrive
+DESCRIPTION:Driving Lesson with DriveBook
 END:VEVENT
 END:VCALENDAR`;
 
