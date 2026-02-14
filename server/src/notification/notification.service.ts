@@ -18,16 +18,15 @@ export class NotificationService {
     return `https://www.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(title)}&dates=${fmt(start)}/${fmt(end)}&details=Driving+Lesson&location=Driving+School&sf=true&output=xml`;
   }
 
-  // Mock Email Sender
-  private async sendEmail(to: string, subject: string, body: string) {
+  // ✅ FIX: Change 'private' to 'public' so MessageService can use it
+  public async sendEmail(to: string, subject: string, body: string) {
     console.log(`\n📨 [EMAIL SENT] To: ${to}`);
     console.log(`Subject: ${subject}`);
     console.log(`Body: \n${body}\n`);
   }
 
-  // FIX: NOW SENDS A CLICKABLE LINK
+  // SENDS A CLICKABLE LINK
   async sendVerificationEmail(email: string, token: string) {
-    // Point this to your Frontend URL (port 5173)
     const link = `http://localhost:5173/verify-email?token=${token}`;
     
     await this.sendEmail(
@@ -37,7 +36,7 @@ export class NotificationService {
     );
   }
 
-  // FIX: ALSO UPDATED PASSWORD RESET TO SEND LINK
+  // UPDATED PASSWORD RESET TO SEND LINK
   async sendPasswordResetEmail(email: string, token: string) {
     const link = `http://localhost:5173/reset-password?token=${token}`;
     
@@ -57,7 +56,7 @@ export class NotificationService {
     );
   }
 
-  // 2. Notify Student of Confirmation (WITH CALENDAR LINK)
+  // 2. Notify Student of Confirmation
   async notifyBookingStatus(email: string, status: 'CONFIRMED' | 'REJECTED', date: string, startTime?: string) {
     if (status === 'CONFIRMED' && startTime) {
       const link = this.generateCalendarLink("Driving Lesson", date, startTime);

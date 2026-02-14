@@ -17,10 +17,14 @@ export class AvailabilityService {
     });
   }
 
-  // Get Slots (For Grid)
+  // ✅ UPDATED: Get Slots (Include Booking Details)
   async getAvailability(adminId: string) {
     return this.prisma.availability.findMany({
       where: { adminId },
+      // 👇 THIS IS THE MISSING PART
+      include: { 
+        booking: true // This fetches the connected Booking + Student ID
+      }, 
       orderBy: { startTime: 'asc' }
     });
   }

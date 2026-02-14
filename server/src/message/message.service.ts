@@ -1,34 +1,61 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
+import { NotificationService } from '../notification/notification.service';
 
 @Injectable()
 export class MessageService {
   private prisma = new PrismaClient();
 
+  constructor(private readonly notif: NotificationService) {}
+
   // 1. SEND MESSAGE
-  async sendMessage(senderId: string, receiverId: string, content: string) {
-    return this.prisma.message.create({
-      data: { senderId, receiverId, content }
+  async sendMessage(senderId: string, receiverId: string, content: string, isChat: boolean = false) {
+    const message = await this.prisma.message.create({
+      data: { senderId, receiverId, content, isRead: false }
     });
+
+    // Email Notification Logic (No Spam)
+    if (!isChat) {
+       const sender = await this.prisma.user.findUnique({ where: { id: senderId } });
+       const receiver = await this.prisma.user.findUnique({ where: { id: receiverId } });
+
+       if (receiver?.email && sender) {
+          await this.notif.sendEmail(
+            receiver.email,
+            `New Message from ${sender.fullName}`,
+            `Hello ${receiver.fullName},\n\n${sender.fullName} sent you a message:\n\n"${content}"\n\nLog in to PlusDrive to reply.`
+          );
+       }
+    }
+    return message;
   }
 
-  // 2. GET CHAT HISTORY (Between two users)
-  async getMessages(user1: string, user2: string) {
+  // 2. GET CONVERSATION (Now Handles "Seen" Status)
+  async getMessages(currentUser: string, otherUser: string) {
+    // A. Mark messages sent BY the other user TO me as "Read"
+    await this.prisma.message.updateMany({
+      where: {
+        senderId: otherUser,
+        receiverId: currentUser,
+        isRead: false
+      },
+      data: { isRead: true }
+    });
+
+    // B. Return the history
     return this.prisma.message.findMany({
       where: {
         OR: [
-          { senderId: user1, receiverId: user2 },
-          { senderId: user2, receiverId: user1 }
+          { senderId: currentUser, receiverId: otherUser },
+          { senderId: otherUser, receiverId: currentUser }
         ]
       },
-      orderBy: { createdAt: 'asc' } // Oldest first (like a chat)
+      orderBy: { createdAt: 'asc' }
     });
   }
 
-  // 3. GET CONTACT LIST (People you have talked to OR have bookings with)
+  // 3. GET CONTACTS (Now Includes Email)
   async getContacts(userId: string) {
-    // Strategy: Get everyone involved in a Booking with this user
-    // This is the safest way to "connect" students and instructors
     const bookings = await this.prisma.booking.findMany({
       where: {
         OR: [{ studentId: userId }, { adminId: userId }]
@@ -39,14 +66,15 @@ export class MessageService {
     const contacts = new Map();
 
     bookings.forEach(b => {
-      // If I am the student, add the admin. If I am the admin, add the student.
       const otherUser = b.studentId === userId ? b.admin : b.student;
       if (!contacts.has(otherUser.id)) {
         contacts.set(otherUser.id, {
           id: otherUser.id,
-          fullName: otherUser.fullName,
+          name: otherUser.fullName, 
+          email: otherUser.email, // ✅ ADDED EMAIL HERE
           role: otherUser.role,
-          lastMessage: "Click to start chatting" // You can enhance this later
+          lastMsg: "Click to chat",
+          date: b.createdAt
         });
       }
     });

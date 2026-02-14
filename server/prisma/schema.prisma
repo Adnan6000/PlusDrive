@@ -56,25 +56,28 @@ model Availability {
   isBooked  Boolean  @default(false)
   
   admin     User     @relation(fields: [adminId], references: [id])
+  booking   Booking?
 }
 
 model Booking {
-  id        String   @id @default(uuid())
-  status    String   @default("PENDING") 
-  date      DateTime
-  startTime String
-  endTime   String
-  type      String   @default("Driving")
-  attendance String  @default("PENDING") 
-  note       String?
+  id                String   @id @default(uuid())
+  availabilityId    String   @unique
+  status            String   @default("PENDING") 
+  date              DateTime
+  startTime         String
+  endTime           String
+  type              String   @default("Driving")
+  attendance        String   @default("PENDING") 
+  note              String?
 
-  studentId String
-  student   User     @relation("StudentBookings", fields: [studentId], references: [id])
+  studentId         String
+  student           User     @relation("StudentBookings", fields: [studentId], references: [id])
   
-  adminId   String
-  admin     User     @relation("AdminBookings", fields: [adminId], references: [id])
+  adminId           String
+  admin             User     @relation("AdminBookings", fields: [adminId], references: [id])
+  availability      Availability  @relation(fields: [availabilityId], references: [id])
 
-  createdAt DateTime @default(now())
+  createdAt         DateTime @default(now())
 }
 
 model School {

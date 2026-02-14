@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom'; // 👈 Added this
 import api from '../api/axios';
 import { FaPaperPlane, FaSearch, FaUserCircle, FaChalkboardTeacher, FaUserGraduate } from 'react-icons/fa';
 
@@ -16,16 +17,17 @@ export default function Inbox() {
   const [reply, setReply] = useState('');
   
   const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const location = useLocation(); // 👈 To catch the data sent from Booking Page
 
   useEffect(() => {
     fetchInbox();
   }, []);
 
-  // Poll for new messages every 5 seconds if a chat is open
+  // Poll for new messages every 3 seconds if a chat is open
   useEffect(() => {
     if (selectedContact) {
         fetchConversation();
-        const interval = setInterval(fetchConversation, 5000); 
+        const interval = setInterval(fetchConversation, 3000); 
         return () => clearInterval(interval);
     }
   }, [selectedContact]);
@@ -34,36 +36,42 @@ export default function Inbox() {
     try {
       const res = await api.get(`/messages/inbox/${user.id}`);
       let contacts = res.data;
-      setInboxList(contacts);
-
-      // CHECK IF WE NEED TO AUTO-OPEN INSTRUCTOR CHAT
-      const shouldOpenInstructor = sessionStorage.getItem('openChat') === 'INSTRUCTOR';
       
-      if (shouldOpenInstructor && user.role === 'STUDENT') {
-         // Try to find existing chat with instructor
-         const instructor = contacts.find((c: any) => c.role === 'ADMIN');
-         
-         if (instructor) {
-            setSelectedContact(instructor);
-         } else {
-            // No history? Fetch instructor details manually
-            const schoolRes = await api.get(`/auth/school-instructors/${user.schoolId}`);
-            if (schoolRes.data.length > 0) {
-                 const newInst = schoolRes.data[0];
-                 const dummyContact = {
-                     id: newInst.id,
-                     name: newInst.fullName,
-                     role: 'ADMIN',
-                     lastMsg: 'Start a conversation...',
-                     date: new Date().toISOString()
-                 };
-                 // Add dummy contact to top of list
-                 setInboxList([dummyContact, ...contacts]);
-                 setSelectedContact(dummyContact);
-            }
-         }
-         // Clear the flag so it doesn't happen every time
-         sessionStorage.removeItem('openChat');
+      // ✅ LOGIC: Check if we came from "My Bookings" page with a specific person to chat with
+      const chatWithId = location.state?.chatWith;
+      
+      if (chatWithId) {
+          // 1. Check if this person is already in our inbox list
+          const existing = contacts.find((c: any) => c.id === chatWithId);
+          
+          if (existing) {
+             setInboxList(contacts);
+             setSelectedContact(existing); // Open it immediately
+          } else {
+             // 2. If not in list, fetch their details to start a NEW chat
+             try {
+                // Assuming you have an endpoint to get user details by ID
+                // If not, we can try to fetch generic instructor info
+                const userRes = await api.get(`/auth/user/${chatWithId}`); 
+                const newContact = {
+                   id: userRes.data.id,
+                   name: userRes.data.fullName,
+                   role: userRes.data.role === 'INSTRUCTOR' ? 'ADMIN' : 'STUDENT',
+                   lastMsg: 'Start a conversation...',
+                   date: new Date().toISOString()
+                };
+                contacts = [newContact, ...contacts]; // Add to top
+                setInboxList(contacts);
+                setSelectedContact(newContact);
+             } catch (err) {
+                console.error("Could not fetch new contact details", err);
+                setInboxList(contacts);
+             }
+          }
+          // Clear the state so it doesn't reopen on refresh
+          window.history.replaceState({}, document.title);
+      } else {
+          setInboxList(contacts);
       }
 
     } catch (error) { console.error(error); }
@@ -86,7 +94,8 @@ export default function Inbox() {
           senderId: user.id,
           receiverId: selectedContact.id,
           content: reply,
-          subject: 'Chat Message'
+          subject: 'Chat Message',
+          isChat: true // 👈 Flag to tell Backend: "Don't email this, it's just a chat"
         });
         
         setReply('');
