@@ -1,10 +1,16 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
+import * as express from 'express';
+import { join } from 'path';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // ✅ IMPROVED: Robust CORS configuration
+  // ✅ NEW: Enable Static File Serving for Uploads
+  // This tells the server: "If someone asks for /uploads/image.png, look in the uploads folder."
+  app.use('/uploads', express.static(join(__dirname, '..', 'uploads')));
+
+  // ✅ PREVIOUS LOGIC: Robust CORS configuration (Kept Unchanged)
   app.enableCors({
     origin: (origin, callback) => {
       // List of allowed static domains

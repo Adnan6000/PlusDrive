@@ -1,6 +1,7 @@
 generator client {
   provider = "prisma-client-js"
   binaryTargets = ["native", "rhel-openssl-3.0.x"]
+  engineType = "library"
 }
 
 datasource db {
@@ -88,7 +89,7 @@ model School {
 
 model Message {
   id        String   @id @default(uuid())
-  content   String
+  content   String?
   
   senderId  String
   sender    User     @relation("SentMessages", fields: [senderId], references: [id])
@@ -98,6 +99,13 @@ model Message {
   
   isRead    Boolean  @default(false)
   createdAt DateTime @default(now())
+
+  attachmentUrl String?
+  attachmentType  String?
+
+  isDeletedEveryone   Boolean   @default(false)
+  deletedBySender     Boolean   @default(false)
+  deletedByReceiver   Boolean   @default(false)
 }
 
 model Lesson {
