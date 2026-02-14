@@ -3,6 +3,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { MessageService } from './message.service';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
+import { tmpdir } from 'os'; // 👈 Import this
 
 @Controller('messages') 
 export class MessageController {
@@ -16,24 +17,23 @@ export class MessageController {
     );
   }
 
-  // ✅ 2. UPLOAD FILE ENDPOINT (Fixed)
+  // ✅ 2. UPLOAD FILE ENDPOINT (Fixed for Vercel EROFS)
   @Post('upload')
   @UseInterceptors(FileInterceptor('file', {
     storage: diskStorage({
-      destination: './uploads', 
+      // 🟢 FIX: Use tmpdir() because /var/task is read-only on Vercel
+      destination: tmpdir(), 
       filename: (req, file, cb) => {
         const randomName = Array(32).fill(null).map(() => (Math.round(Math.random() * 16)).toString(16)).join('');
         cb(null, `${randomName}${extname(file.originalname)}`);
       },
     }),
   }))
-  // 🔴 FIX 1: Use 'any' to stop the TypeScript error
   async uploadFile(@UploadedFile() file: any, @Body() body: any) {
-    
-    // 🔴 FIX 2: Use RELATIVE PATH (No http://localhost...)
+    // 🔴 IMPORTANT: Files in /tmp are temporary. 
+    // For a permanent solution, you must use Cloudinary or Vercel Blob.
     const filePath = `/uploads/${file.filename}`;
     
-    // Save message to DB
     return this.messageService.sendMessageWithAttachment(
       body.senderId, 
       body.receiverId, 
@@ -52,8 +52,7 @@ export class MessageController {
     return this.messageService.getContacts(userId);
   }
 
-  // ✅ DELETE ENDPOINT
-  @Post('delete') // Using POST instead of DELETE to easily pass body
+  @Post('delete')
   async deleteMessage(@Body() body: { messageId: string, userId: string, type: 'ME' | 'EVERYONE' }) {
     return this.messageService.deleteMessage(
       body.messageId, 
@@ -61,7 +60,7 @@ export class MessageController {
       body.type === 'EVERYONE'
     );
   }
-  // ✅ NEW: CLEAR CHAT ENDPOINT
+
   @Post('clear')
   async clearChat(@Body() body: { userId: string, otherId: string }) {
     return this.messageService.clearChat(body.userId, body.otherId);
