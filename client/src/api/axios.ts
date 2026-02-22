@@ -11,3 +11,10 @@ const api = axios.create({
 });
 
 export default api;
+export const requestPickup = async (bookingId: string, data: any) => {
+  return await api.put(`/booking/${bookingId}/pickup/request`, data);
+};
+
+export const decidePickup = async (bookingId: string, data: any) => {
+  return await api.put(`/booking/${bookingId}/pickup/decide`, data);
+};

@@ -2,7 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
 
 // Public Pages
-import LandingPage from './pages/LandingPage'; // 👈 Make sure you create this file!
+import LandingPage from './pages/LandingPage'; 
 import Login from './pages/Login';
 import Register from './pages/Register';
 import VerifyEmail from './pages/VerifyEmail';
@@ -17,10 +17,11 @@ import Theory from './pages/Theory';
 import Economy from './pages/Economy';
 import Profile from './pages/Profile';
 
+// ✅ 1. ADD THIS IMPORT
+import StudentBooking from './pages/StudentBooking'; 
+
 // Simple "Guard" to protect the dashboard
-// (Fixed the JSX error by removing strict type annotation)
 const ProtectedRoute = ({ children }: { children: any }) => {
-  // Check if user is logged in (adjust key if you use 'token' or 'user')
   const isAuthenticated = localStorage.getItem('token') || localStorage.getItem('user'); 
   
   if (!isAuthenticated) {
@@ -34,23 +35,19 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         {/* ==================================================== */}
-        {/* 1. PUBLIC ROUTES (Accessible by everyone)            */}
+        {/* 1. PUBLIC ROUTES                                     */}
         {/* ==================================================== */}
         
-        {/* ✅ The 3D Landing Page is now the Homepage */}
         <Route path="/" element={<LandingPage />} /> 
-        
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/verify-email" element={<VerifyEmail />} /> 
         
         {/* ==================================================== */}
-        {/* 2. PROTECTED ROUTES (Only for logged-in users)       */}
+        {/* 2. PROTECTED ROUTES                                  */}
         {/* ==================================================== */}
-        {/* All these pages will have the Sidebar & Navbar */}
         
         <Route element={<Layout />}>
-           {/* If someone goes to /dashboard, show Dashboard */}
            <Route 
              path="/dashboard" 
              element={
@@ -62,6 +59,10 @@ export default function App() {
            
            <Route path="/reservations" element={<ProtectedRoute><Reservations /></ProtectedRoute>} />
            <Route path="/my-bookings" element={<ProtectedRoute><MyBookingsPage /></ProtectedRoute>} />
+           
+           {/* ✅ 2. ADD THIS ROUTE FOR THE CALENDAR */}
+           <Route path="/book" element={<ProtectedRoute><StudentBooking /></ProtectedRoute>} />
+
            <Route path="/inbox" element={<ProtectedRoute><Inbox /></ProtectedRoute>} />
            <Route path="/users" element={<ProtectedRoute><Users /></ProtectedRoute>} />
            

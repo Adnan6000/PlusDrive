@@ -46,6 +46,8 @@ model User {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  invoices  Invoice[]
+  notifications   Notification[]
 }
 
 model Availability {
@@ -79,12 +81,32 @@ model Booking {
   availability      Availability  @relation(fields: [availabilityId], references: [id])
 
   createdAt         DateTime @default(now())
+
+  // 1. Student Request data
+  reqLocation       String?   // The address text student typed
+  reqLat            Float?    // Latitude for map Pin 
+  reqLng            Float?    // Longitude for map Pin
+  studentNote       String?   // "I'll be at the bus stop"
+  reqAt             DateTime? // When they asked for it 
+  
+
+  // 2. Instructor Decision data
+  finalLocation     String?   // The ACTUAL place the lesson starts
+  finalLat          Float?
+  finalLng          Float?
+  instructorNote    String?   // "I can't stop there, meet at corner"
+  decidedAt         DateTime? // When instructor clicked Accept/Reject
+  PickupStatus      PickupStatus  @default(NONE)
+  paymentProof      PaymentProof?
+  customPrice       Float?
 }
 
 model School {
   id        String   @id @default(uuid())
   name      String
   users     User[]
+  bankRegNum      String?   // e.g., 6695
+  bankAccountNum  String? // e.g., 2001753439
 }
 
 model Message {
@@ -114,5 +136,47 @@ model Lesson {
   content   String   // Description or study notes
   videoUrl  String?  // YouTube link
   category  String   // "Car" or "Motorcycle"
+  createdAt DateTime @default(now())
+}
+
+enum PickupStatus {
+  NONE
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+model PaymentProof {
+  id              String   @id @default(uuid())
+  bookingId       String   @unique
+  proofUrl        String   // URL to the uploaded image/screenshot
+  status          String   @default("PENDING") // PENDING, APPROVED, REJECTED
+  uploadedAt      DateTime @default(now())
+  
+  booking         Booking  @relation(fields: [bookingId], references: [id])
+}
+
+model Invoice {
+  id           String   @id @default(uuid())
+  invoiceNo    String   @unique // Auto-generated e.g., INV-2026-001
+  studentId    String
+  amount       Float
+  status       String   @default("PENDING") // PENDING, REVIEWING, PAID, REJECTED
+  proofUrl     String?
+  instructorNote String?
+  dueDate      DateTime
+  createdAt    DateTime @default(now())
+  
+  student      User     @relation(fields: [studentId], references: [id])
+  description   String
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  message   String
+  type      String   // e.g., "PICKUP_UPDATE"
+  isRead    Boolean  @default(false)
   createdAt DateTime @default(now())
 }

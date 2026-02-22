@@ -17,7 +17,7 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto flex justify-between items-center">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg shadow-lg shadow-blue-500/50 flex items-center justify-center font-bold text-lg">P</div>
-            <span className="text-xl font-black tracking-tighter uppercase">Plus<span className="text-blue-500">Drive</span></span>
+            <span className="text-xl font-black tracking-tighter uppercase">Drive<span className="text-blue-500">Book</span></span>
           </div>
           <div className="flex gap-4 items-center">
              {/* Small Login Button */}

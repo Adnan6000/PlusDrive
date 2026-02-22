@@ -1,7 +1,22 @@
 import { Injectable } from '@nestjs/common';
-
+import * as nodemailer from 'nodemailer';
+// ✅ FIXED PATH: Using a direct relative path to ensure resolution
+import { PrismaService } from './../prisma/prisma.service';
 @Injectable()
 export class NotificationService {
+  private transporter;
+  private readonly clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+
+  constructor(private readonly prisma: PrismaService) {
+    // Uses credentials from .env
+    this.transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: process.env.EMAIL_USER, // e.g. fazalmohammad333@gmail.com
+        pass: process.env.EMAIL_PASS, // Your App Password
+      },
+    });
+  }
 
   // Helper: Generate Google Calendar Link for Email
   private generateCalendarLink(title: string, date: string, startTime: string) {
@@ -9,7 +24,6 @@ export class NotificationService {
     const [h, m] = startTime.split(':');
     start.setHours(parseInt(h), parseInt(m));
     
-    // Default 1 hour duration
     const end = new Date(start);
     end.setHours(start.getHours() + 1);
 
@@ -18,17 +32,29 @@ export class NotificationService {
     return `https://www.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(title)}&dates=${fmt(start)}/${fmt(end)}&details=Driving+Lesson&location=Driving+School&sf=true&output=xml`;
   }
 
-  // ✅ FIX: Change 'private' to 'public' so MessageService can use it
+  // ✅ Send generic email using Nodemailer
   public async sendEmail(to: string, subject: string, body: string) {
-    console.log(`\n📨 [EMAIL SENT] To: ${to}`);
-    console.log(`Subject: ${subject}`);
-    console.log(`Body: \n${body}\n`);
+    const mailOptions = {
+      from: `"DriveBook" <${process.env.EMAIL_USER?.toLowerCase()}>`,
+      to: to.toLowerCase(),
+      subject: subject,
+      text: body,
+    };
+
+    try {
+      await this.transporter.sendMail(mailOptions);
+      console.log(`📨 [EMAIL SENT] To: ${to.toLowerCase()}`);
+    } catch (error) {
+      console.error(`❌ [EMAIL FAILED] To: ${to}`, error);
+    }
   }
 
-  // SENDS A CLICKABLE LINK
+  // ==========================================================
+  // 1. AUTHENTICATION LOGICS
+  // ==========================================================
+
   async sendVerificationEmail(email: string, token: string) {
-    const link = `http://localhost:5173/verify-email?token=${token}`;
-    
+    const link = `${this.clientUrl}/verify-email?token=${token}`;
     await this.sendEmail(
       email, 
       "Verify Account", 
@@ -36,10 +62,8 @@ export class NotificationService {
     );
   }
 
-  // UPDATED PASSWORD RESET TO SEND LINK
   async sendPasswordResetEmail(email: string, token: string) {
-    const link = `http://localhost:5173/reset-password?token=${token}`;
-    
+    const link = `${this.clientUrl}/reset-password?token=${token}`;
     await this.sendEmail(
       email, 
       "Reset Password", 
@@ -47,7 +71,10 @@ export class NotificationService {
     );
   }
 
-  // 1. Notify Instructor of New Request
+  // ==========================================================
+  // 2. BOOKING & PICKUP LOGICS
+  // ==========================================================
+
   async notifyInstructorBooking(email: string, studentName: string, date: string, time: string) {
     await this.sendEmail(
       email, 
@@ -56,7 +83,6 @@ export class NotificationService {
     );
   }
 
-  // 2. Notify Student of Confirmation
   async notifyBookingStatus(email: string, status: 'CONFIRMED' | 'REJECTED', date: string, startTime?: string) {
     if (status === 'CONFIRMED' && startTime) {
       const link = this.generateCalendarLink("Driving Lesson", date, startTime);
@@ -72,5 +98,53 @@ export class NotificationService {
         `Your booking request for ${new Date(date).toDateString()} was rejected.`
       );
     }
+  }
+
+  async notifyPickupUpdate(email: string, studentName: string, status: string, location: string, note?: string) {
+    const message = `Hello ${studentName},\n\nYour pickup request has been ${status}.\nFinal Pickup Location: ${location}\n${note ? `Instructor Note: ${note}` : ''}\n\nBest regards,\nDriveBook Team`;
+    await this.sendEmail(email, `Pickup Location Update: ${status}`, message);
+  }
+
+  async notifyPaymentProof(instructorEmail: string, studentName: string, bookingDate: string) {
+    await this.sendEmail(
+      instructorEmail,
+      "New Payment Proof Received 💰",
+      `Student ${studentName} has uploaded payment proof for the lesson on ${new Date(bookingDate).toDateString()}. Please log in to the Finance Dashboard to verify.`
+    );
+  }
+
+  // ==========================================================
+  // 3. SYSTEM NOTIFICATION LOGICS
+  // ==========================================================
+
+  async createNotification(userId: string, message: string, type: string) {
+    // 1. Save to Database for the bell icon
+    const notif = await this.prisma.notification.create({
+      data: { userId, message, type, isRead: false }
+    });
+
+    // 2. Logic: Simultaneously Trigger Email
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (user?.email) {
+       // Integration: Using the internal sendEmail method to ensure delivery
+       await this.sendEmail(user.email, `DriveBook Alert: ${type}`, message);
+    }
+    
+    return notif;
+  }
+
+  async getNotifications(userId: string) {
+    return this.prisma.notification.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: 20 
+    });
+  }
+
+  async markAsRead(id: string) {
+    return this.prisma.notification.update({
+      where: { id },
+      data: { isRead: true }
+    });
   }
 }

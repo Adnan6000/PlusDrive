@@ -1,377 +1,219 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom'; // 👈 Added Navigation
-import Calendar from 'react-calendar';
-import 'react-calendar/dist/Calendar.css';
+import { useEffect, useState } from 'react';
 import api from '../api/axios';
-import { 
-  FaChalkboardTeacher, FaCalendarCheck, FaTimes, FaSync, FaInfoCircle,
-  FaCommentDots, FaGoogle, FaApple // 👈 Changed SMS icon to Chat icon
+import {
+    FaCalendarAlt, FaCheck, FaBan,
+    FaInfoCircle, FaSpinner, FaMapMarkerAlt, FaClock
 } from 'react-icons/fa';
+import PickupDecisionModal from '../components/PickupDecisionModal';
+import LocationPicker from '../components/LocationPicker'; 
 
-export default function StudentBooking() {
-  const navigate = useNavigate(); // 👈 Hook for navigation
-  const [date, setDate] = useState(new Date());
-  const [slots, setSlots] = useState<any[]>([]);
-  const [instructors, setInstructors] = useState<any[]>([]);
-  const [selectedInstructor, setSelectedInstructor] = useState('');
-  
-  // MODAL STATE
-  const [showModal, setShowModal] = useState(false);
-  const [selectedSlot, setSelectedSlot] = useState<any>(null);
-  const [bookingNote, setBookingNote] = useState('');
-  
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
+export default function MyBookingsPage() {
+    const [bookings, setBookings] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [decisionBooking, setDecisionBooking] = useState<any>(null);
 
-  // CSS: Force Calendar to be Mobile Responsive
-  const calendarStyle = `
-    .react-calendar { 
-      width: 100% !important; 
-      max-width: 100%; 
-      background: white;
-      border: none;
-      font-family: inherit;
-    }
-    .react-calendar__tile {
-      padding: 10px 0;
-    }
-  `;
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    const isInstructor = user.role === 'INSTRUCTOR' || user.role === 'ADMIN';
 
-  // HELPER: Fix Date Display
-  const fixDateDisplay = (dateString: string) => {
-    if (!dateString) return '';
-    const date = new Date(dateString);
-    const bufferedDate = new Date(date.getTime() + (12 * 60 * 60 * 1000));
-    return bufferedDate.toLocaleDateString('en-GB', { 
-      day: 'numeric', month: 'short', year: 'numeric' 
-    }); 
-  };
-
-  // HELPER: Generate Google Calendar Link
-  const getGoogleCalendarUrl = (dateStr: string, startTime: string, endTime: string) => {
-    const dateObj = new Date(dateStr);
-    const yyyy = dateObj.getFullYear();
-    const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
-    const dd = String(dateObj.getDate()).padStart(2, '0');
-    
-    const startSimple = startTime.replace(':', '') + '00';
-    const endSimple = endTime.replace(':', '') + '00';
-
-    const isoStart = `${yyyy}${mm}${dd}T${startSimple}`;
-    const isoEnd = `${yyyy}${mm}${dd}T${endSimple}`;
-
-    return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=Driving+Lesson&dates=${isoStart}/${isoEnd}&details=Driving+Lesson+with+DriveBook`;
-  };
-
-  // HELPER: Generate .ics (Apple/Outlook) File
-  const downloadIcs = (dateStr: string, startTime: string, endTime: string) => {
-    const dateObj = new Date(dateStr);
-    const yyyy = dateObj.getFullYear();
-    const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
-    const dd = String(dateObj.getDate()).padStart(2, '0');
-    
-    const startSimple = startTime.replace(':', '') + '00';
-    const endSimple = endTime.replace(':', '') + '00';
-
-    const icsContent = `BEGIN:VCALENDAR
-VERSION:2.0
-BEGIN:VEVENT
-SUMMARY:Driving Lesson
-DTSTART;TZID=Asia/Karachi:${yyyy}${mm}${dd}T${startSimple}
-DTEND;TZID=Asia/Karachi:${yyyy}${mm}${dd}T${endSimple}
-DESCRIPTION:Driving Lesson with DriveBook
-END:VEVENT
-END:VCALENDAR`;
-
-    const blob = new Blob([icsContent], { type: 'text/calendar' });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', 'lesson.ics');
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  // 1. Fetch Instructors
-  useEffect(() => {
-    const fetchInstructors = async () => {
+    const fetchBookings = async () => {
+        setLoading(true);
         try {
-            const res = await api.get(`/auth/school-instructors/any`);
-            setInstructors(res.data);
-            if(res.data.length > 0 && !selectedInstructor) {
-              setSelectedInstructor(res.data[0].id);
-            }
-        } catch (e) { console.error("Instructors fetch error", e); }
+            const res = await api.get(`/booking/${user.id}`);
+            setBookings(Array.isArray(res.data) ? res.data : []);
+        } catch (error) {
+            console.error("Failed to fetch bookings", error);
+        } finally {
+            setLoading(false);
+        }
     };
-    fetchInstructors();
-  }, []);
 
-  // 2. Fetch Slots
-  useEffect(() => {
-    fetchSlots();
-  }, [selectedInstructor]);
+    useEffect(() => {
+        fetchBookings();
+    }, [user.id]);
 
-  const fetchSlots = async () => {
-    if (!selectedInstructor) return;
-    try {
-        const res = await api.get(`/availability/${selectedInstructor}`);
-        setSlots(res.data);
-    } catch (e) { console.error("Slots fetch error", e); }
-  };
+    const fixDateDisplay = (dateString: string) => {
+        const date = new Date(dateString);
+        return date.toLocaleDateString('en-GB', {
+            weekday: 'short', day: 'numeric', month: 'short'
+        });
+    };
 
-  // 3. Match Slots to Day
-  const isSameDay = (calendarDate: Date, apiDateString: string) => {
-    if (!apiDateString) return false;
-    const apiDate = new Date(apiDateString);
-    const bufferedApiDate = new Date(apiDate.getTime() + (12 * 60 * 60 * 1000));
-    
-    const year = calendarDate.getFullYear();
-    const month = String(calendarDate.getMonth() + 1).padStart(2, '0');
-    const day = String(calendarDate.getDate()).padStart(2, '0');
-    
-    const localDateString = `${year}-${month}-${day}`;
-    const apiDateLocal = bufferedApiDate.toISOString().split('T')[0]; 
-    
-    return localDateString === apiDateLocal;
-  };
+    const handleAcceptPickup = async (booking: any) => {
+        if (!window.confirm("Confirm acceptance of this pickup location?")) return;
+        try {
+            await api.put(`/booking/${booking.id}/pickup/decide`, {
+                instructorId: user.id,
+                action: 'ACCEPT'
+            });
+            alert("Location Accepted Successfully");
+            fetchBookings();
+        } catch (e) {
+            alert("Action failed. Please try again.");
+        }
+    };
 
-  const daySlots = slots.filter(s => isSameDay(date, s.date));
-  
-  // 4. Calendar Dots
-  const tileContent = ({ date, view }: any) => {
-    if (view === 'month' && slots.some(s => isSameDay(date, s.date) && !s.isBooked)) {
-       return <div className="h-2 w-2 bg-green-500 rounded-full mx-auto mt-1 shadow-sm"></div>;
-    }
-    return null;
-  };
-
-  const handleSlotClick = (slot: any) => {
-    setSelectedSlot(slot);
-    setBookingNote('');
-    setShowModal(true);
-  };
-
-  const submitBooking = async () => {
-    if (!selectedSlot) return;
-    try {
-      await api.post('/booking/request', {
-        studentId: user.id,
-        availabilityId: selectedSlot.id,
-        type: 'Driving',
-        note: bookingNote
-      });
-      alert("Request Sent! Please check 'My Bookings'.");
-      setShowModal(false);
-      fetchSlots(); 
-    } catch (error) { alert("Booking failed. Slot might be taken."); }
-  };
-
-  // ✅ New Logic: Go to Inbox
-  const handleMessageClick = (instructorId: string) => {
-     // Navigate to inbox and pass the instructor ID so we can eventually open that chat
-     navigate('/inbox', { state: { chatWith: instructorId } });
-  };
-
-  return (
-    <div className="space-y-6 relative">
-      <style>{calendarStyle}</style>
-
-      <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
-        
-        {/* HEADER */}
-        <div className="mb-6 flex flex-col sm:flex-row gap-4 items-end sm:items-center justify-between border-b pb-6">
-            <div className="w-full sm:max-w-md">
-               <label htmlFor="instructor-select" className="block text-sm font-bold text-slate-700 mb-2 flex items-center gap-2">
-                 <FaChalkboardTeacher className="text-blue-600"/> Select Instructor
-               </label>
-               <select 
-                 id="instructor-select"
-                 className="w-full border p-2.5 rounded bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none shadow-sm" 
-                 value={selectedInstructor} 
-                 onChange={e => setSelectedInstructor(e.target.value)}
-               >
-                 {instructors.length === 0 && <option value="">No instructors found</option>}
-                 {instructors.map(i => <option key={i.id} value={i.id}>{i.fullName}</option>)}
-               </select>
+    return (
+        <div className="max-w-4xl mx-auto space-y-6">
+            <div className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-slate-100">
+                <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+                    <FaCalendarAlt className="text-blue-600" />
+                    {isInstructor ? 'Instructor: Booking Management' : 'My Lesson History'}
+                </h2>
+                <button
+                    onClick={fetchBookings}
+                    className="text-sm bg-blue-50 text-blue-600 px-4 py-2 rounded-lg font-bold hover:bg-blue-100 transition"
+                    title="Refresh List"
+                >
+                    Refresh List
+                </button>
             </div>
-            
-            <button 
-                onClick={fetchSlots}
-                className="text-sm flex items-center gap-2 text-blue-600 hover:text-blue-800 font-bold px-4 py-2 bg-blue-50 rounded-full transition"
-            >
-                <FaSync /> Refresh
-            </button>
-        </div>
 
-        {/* CALENDAR & GRID */}
-        <div className="flex flex-col lg:flex-row gap-8">
-          {/* LEFT: CALENDAR */}
-          <div className="w-full lg:w-1/3">
-            <div className="bg-slate-50 p-4 rounded-lg border border-slate-100">
-                <Calendar 
-                    onChange={(d: any) => setDate(d)} 
-                    value={date} 
-                    tileContent={tileContent} 
-                    className="w-full border-none shadow-sm rounded-lg p-2" 
-                />
-                <div className="mt-4 flex items-center justify-center gap-2 text-xs text-slate-500">
-                    <div className="h-2 w-2 bg-green-500 rounded-full"></div>
-                    <span>Dates with available slots</span>
+            {loading ? (
+                <div className="flex justify-center py-20">
+                    <FaSpinner className="animate-spin text-4xl text-blue-500" />
                 </div>
-            </div>
-          </div>
+            ) : bookings.length === 0 ? (
+                <div className="text-center py-16 bg-white rounded-2xl border border-dashed border-slate-300">
+                    <FaInfoCircle className="text-4xl text-slate-300 mx-auto mb-3" />
+                    <p className="text-slate-500 font-medium">No bookings found.</p>
+                </div>
+            ) : (
+                <div className="grid gap-4">
+                    {bookings.map((booking) => (
+                        <div key={booking.id} className="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                            <div className="flex justify-between items-start mb-4">
+                                <div>
+                                    <h3 className="text-lg font-bold text-slate-800">{fixDateDisplay(booking.date)}</h3>
+                                    <p className="text-sm text-blue-600 font-semibold flex items-center gap-1">
+                                        <FaClock size={12} /> {booking.startTime} - {booking.endTime}
+                                    </p>
+                                    <p className="text-xs text-slate-500 mt-1">
+                                        {isInstructor ? `Student: ${booking.student?.fullName}` : `Instructor: ${booking.admin?.fullName}`}
+                                    </p>
+                                </div>
+                                <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                                    booking.status === 'CONFIRMED' ? 'bg-green-100 text-green-700' :
+                                    booking.status === 'REJECTED' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
+                                }`}>
+                                    {booking.status}
+                                </span>
+                            </div>
 
-          {/* RIGHT: SLOTS GRID */}
-          <div className="w-full lg:w-2/3">
-            <h3 className="font-bold text-slate-700 mb-4 flex items-center gap-2 text-lg">
-              <FaCalendarCheck className="text-blue-600" /> 
-              Available Slots: <span className="text-slate-500 font-normal ml-1">{date.toDateString()}</span>
-            </h3>
-            
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-              {daySlots.length > 0 ? daySlots.map(slot => {
-                  const myBooking = slot.booking; 
-                  const isMyBooking = myBooking?.studentId === user.id || slot.studentId === user.id;
-                  const isPending = isMyBooking && (myBooking?.status === 'PENDING');
-                  const isTakenByOthers = slot.isBooked && !isMyBooking;
-                  
-                  // Dynamic Styles
-                  let cardClass = "bg-white border-blue-200 text-blue-900 hover:shadow-md hover:border-blue-400 hover:-translate-y-1 cursor-pointer";
-                  let statusClass = "bg-blue-100 text-blue-700";
-                  let statusText = "BOOK NOW";
+                            <div className="pt-4 border-t border-slate-100">
+                                <h4 className="text-xs font-bold text-slate-400 uppercase mb-3 flex items-center gap-2">
+                                    <FaMapMarkerAlt /> Pickup Management
+                                </h4>
 
-                  if (isTakenByOthers) {
-                    cardClass = "bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed";
-                    statusClass = "bg-slate-200 text-slate-500";
-                    statusText = "TAKEN";
-                  } else if (isPending) {
-                    cardClass = "bg-amber-50 border-amber-200 text-amber-900 cursor-default";
-                    statusClass = "bg-amber-100 text-amber-700";
-                    statusText = "WAITING...";
-                  } else if (isMyBooking) {
-                    cardClass = "bg-green-50 border-green-200 text-green-900 cursor-default";
-                    statusClass = "bg-green-200 text-green-700";
-                    statusText = "YOURS";
-                  }
+                                {/* PICKUP STATUS: PENDING (Decision Phase) */}
+                                {booking.PickupStatus === 'PENDING' && (
+                                    <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 space-y-4">
+                                        <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-sm font-bold text-blue-900">Student Request:</p>
+                                                <p className="text-sm text-blue-800 break-words">{booking.reqLocation || 'No address specified'}</p>
+                                                {booking.studentNote && (
+                                                    <p className="text-xs text-slate-500 italic mt-1">Note: "{booking.studentNote}"</p>
+                                                )}
+                                            </div>
+                                            {isInstructor && (
+                                                <div className="flex flex-row sm:flex-col gap-2 shrink-0 w-full sm:w-auto">
+                                                    <button
+                                                        onClick={() => handleAcceptPickup(booking)}
+                                                        className="flex-1 bg-green-600 text-white text-[11px] px-4 py-2 rounded-lg font-bold shadow-sm hover:bg-green-700 transition"
+                                                        title="Confirm Location"
+                                                    >
+                                                        Accept
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setDecisionBooking(booking)}
+                                                        className="flex-1 bg-orange-500 text-white text-[11px] px-4 py-2 rounded-lg font-bold shadow-sm hover:bg-orange-600 transition"
+                                                        title="Propose Different Location"
+                                                    >
+                                                        Change
+                                                    </button>
+                                                    {/* Large Map Button integration */}
+                                                    <button 
+                                                        onClick={() => window.open(`https://www.google.com/maps?q=${booking.reqLat},${booking.reqLng}`, '_blank')}
+                                                        className="mt-2 text-xs text-blue-600 font-bold flex items-center gap-1 hover:underline"
+                                                        title="Open location in Google Maps"
+                                                        >
+                                                        <FaMapMarkerAlt /> Open in Large Map
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
 
-                  return (
-                    <div 
-                      key={slot.id} 
-                      onClick={() => !slot.isBooked && handleSlotClick(slot)}
-                      className={`relative p-4 rounded-xl border text-center transition shadow-sm group flex flex-col items-center justify-between h-40 ${cardClass}`}
-                    >
-                      <div className="w-full">
-                        <p className="font-bold text-xl">{slot.startTime} - {slot.endTime}</p>
-                        
-                        <span className={`inline-block text-[10px] font-bold uppercase mt-2 px-3 py-1 rounded-full ${statusClass}`}>
-                          {statusText}
-                        </span>
-                      </div>
+                                        {/* Instructor Map View */}
+                                        {isInstructor && booking.reqLat && booking.reqLng && (
+                                            <div className="h-48 w-full rounded-lg overflow-hidden border border-blue-200 shadow-inner z-0">
+                                                <LocationPicker
+                                                    initialLat={booking.reqLat}
+                                                    initialLng={booking.reqLng}
+                                                    initialAddress={booking.reqLocation}
+                                                    readOnly={true}
+                                                />
+                                            </div>
+                                        )}
 
-                      {/* ✅ ACTIONS: MESSAGE & CALENDAR */}
-                      {isMyBooking && (
-                        <div className="flex gap-2 mt-3 w-full justify-center border-t pt-2 border-black/5">
-                           
-                           {/* MESSAGE BUTTON (Visible for Waiting & Confirmed) */}
-                           <button 
-                             onClick={(e) => {
-                               e.stopPropagation();
-                               handleMessageClick(slot.adminId); // Go to Inbox
-                             }}
-                             className="p-2 bg-blue-100 text-blue-600 rounded-full hover:bg-blue-200 transition"
-                             title="Message Instructor"
-                           >
-                             <FaCommentDots />
-                           </button>
+                                        {!isInstructor && (
+                                            <p className="text-[10px] text-amber-600 mt-3 font-bold uppercase tracking-widest animate-pulse">
+                                                Waiting for instructor to verify location...
+                                            </p>
+                                        )}
+                                    </div>
+                                )}
 
-                           {/* CALENDAR BUTTONS (Only if Confirmed/YOURS) */}
-                           {!isPending && (
-                             <>
-                               <a 
-                                 href={getGoogleCalendarUrl(slot.date, slot.startTime, slot.endTime)}
-                                 target="_blank" rel="noreferrer"
-                                 className="p-2 bg-red-100 text-red-600 rounded-full hover:bg-red-200 transition"
-                                 title="Add to Google Calendar"
-                                 onClick={(e) => e.stopPropagation()}
-                               >
-                                 <FaGoogle />
-                               </a>
-                               
-                               <button 
-                                 onClick={(e) => {
-                                   e.stopPropagation();
-                                   downloadIcs(slot.date, slot.startTime, slot.endTime);
-                                 }}
-                                 className="p-2 bg-slate-200 text-slate-700 rounded-full hover:bg-slate-300 transition"
-                                 title="Download for Apple Calendar"
-                               >
-                                 <FaApple />
-                               </button>
-                             </>
-                           )}
+                                {/* PICKUP STATUS: ACCEPTED */}
+                                {booking.PickupStatus === 'ACCEPTED' && (
+                                    <div className="bg-green-50 p-4 rounded-lg border border-green-200 flex items-center gap-4">
+                                        <div className="bg-green-100 p-2 rounded-full text-green-600"><FaCheck /></div>
+                                        <div>
+                                            <p className="text-[10px] font-bold text-green-700 uppercase">Pickup Finalized</p>
+                                            <p className="text-sm font-bold text-green-900 break-words">{booking.finalLocation}</p>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* PICKUP STATUS: REJECTED / PROPOSED NEW */}
+                                {booking.PickupStatus === 'REJECTED' && (
+                                    <div className="bg-red-50 p-4 rounded-lg border border-red-200">
+                                        <div className="flex items-center gap-2 text-red-700 font-bold text-xs uppercase tracking-wider mb-2">
+                                            <FaBan /> Instructor Proposed New Location
+                                        </div>
+                                        <div className="space-y-1">
+                                            <p className="text-sm text-slate-800">Final Meeting Point: <span className="font-bold underline">{booking.finalLocation}</span></p>
+                                            {booking.instructorNote && (
+                                                <p className="text-xs text-slate-600 mt-2 bg-white/50 p-2 rounded italic">
+                                                    Instructor Note: "{booking.instructorNote}"
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* NO PICKUP REQUEST */}
+                                {(!booking.PickupStatus || booking.PickupStatus === 'NONE') && (
+                                    <p className="text-sm text-slate-400 italic bg-slate-50 p-3 rounded-lg border border-dashed">
+                                        No pickup location requested for this lesson.
+                                    </p>
+                                )}
+                            </div>
                         </div>
-                      )}
-                    </div>
-                  );
-              }) : (
-                <div className="col-span-full py-16 text-center border-2 border-dashed border-slate-200 rounded-xl bg-slate-50/50">
-                    <FaInfoCircle className="mx-auto text-slate-300 text-3xl mb-3" />
-                    <p className="text-slate-500 font-medium">No slots available for this date.</p>
+                    ))}
                 </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
+            )}
 
-      {/* MODAL */}
-      {showModal && selectedSlot && (
-        <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 backdrop-blur-sm p-4 animate-in fade-in duration-200 overflow-y-auto">
-          <div className="bg-white p-6 rounded-2xl shadow-2xl w-full max-w-md scale-100 transform transition-all my-auto">
-            <div className="flex justify-between items-center mb-6 border-b pb-4">
-              <h3 className="text-xl font-bold text-slate-800">Confirm Booking</h3>
-              
-              <button 
-                onClick={() => setShowModal(false)} 
-                className="p-2 hover:bg-slate-100 rounded-full transition"
-                aria-label="Close Modal"
-              >
-                <FaTimes className="text-slate-400 hover:text-red-500" />
-              </button>
-            </div>
-            
-            <div className="space-y-5">
-              <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 flex justify-between items-center">
-                 <div>
-                    <p className="text-xs font-bold text-blue-600 uppercase tracking-wider">Date</p>
-                    <p className="text-slate-700 font-semibold">{fixDateDisplay(selectedSlot.date)}</p>
-                 </div>
-                 <div className="text-right">
-                    <p className="text-xs font-bold text-blue-600 uppercase tracking-wider">Time</p>
-                    <p className="text-slate-700 font-semibold">{selectedSlot.startTime} - {selectedSlot.endTime}</p>
-                 </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-bold text-slate-700 mb-2">Note for Instructor (Optional)</label>
-                <textarea 
-                  className="w-full border p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none h-28 resize-none bg-slate-50 transition"
-                  placeholder="What would you like to practice?"
-                  value={bookingNote}
-                  onChange={e => setBookingNote(e.target.value)}
+            {/* Decision Modal: Instructor Proposing New Location */}
+            {decisionBooking && (
+                <PickupDecisionModal
+                    booking={decisionBooking}
+                    onClose={() => setDecisionBooking(null)}
+                    onSuccess={() => {
+                        setDecisionBooking(null);
+                        fetchBookings();
+                    }}
                 />
-              </div>
-
-              <button 
-                onClick={submitBooking} 
-                className="w-full bg-blue-600 text-white py-3.5 rounded-xl font-bold hover:bg-blue-700 shadow-lg shadow-blue-200 hover:shadow-blue-300 transition-all transform hover:-translate-y-0.5"
-              >
-                Send Request
-              </button>
-            </div>
-          </div>
+            )}
         </div>
-      )}
-    </div>
-  );
+    );
 }

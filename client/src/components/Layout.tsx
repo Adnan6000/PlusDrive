@@ -1,24 +1,24 @@
-import { useState } from 'react'; // Added useState
+import { useState } from 'react';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { 
   FaHome, FaCalendarAlt, FaEnvelope, FaUsers, 
   FaCar, FaMotorcycle, FaWallet, FaUserCircle, FaSignOutAlt,
-  FaBars, FaTimes // Added Icons for Mobile Menu
+  FaBars, FaTimes, FaCalendarCheck
 } from 'react-icons/fa';
+import NotificationBell from './NotificationBell';
 
 export default function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false); // State for Mobile Menu
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const user = JSON.parse(localStorage.getItem('user') || '{}');
 
   const handleLogout = () => {
-    localStorage.removeItem('access_token');
+    localStorage.removeItem('token'); // Ensure this matches what you set in Login (token vs access_token)
     localStorage.removeItem('user');
     navigate('/login');
   };
 
-  // Helper to close sidebar when a link is clicked (Mobile UX)
   const handleLinkClick = () => {
     setIsSidebarOpen(false);
   };
@@ -34,7 +34,7 @@ export default function Layout() {
     return (
       <Link 
         to={to} 
-        onClick={handleLinkClick} // Close menu on click
+        onClick={handleLinkClick}
         className={`flex items-center gap-3 px-4 py-3 rounded transition-all duration-200 ${active}`}
       >
         <span className="text-lg">{icon}</span>
@@ -46,9 +46,7 @@ export default function Layout() {
   return (
     <div className="flex min-h-screen bg-slate-100 font-sans relative">
       
-      {/* ================================================= */}
-      {/* MOBILE OVERLAY (Backdrop)                         */}
-      {/* ================================================= */}
+      {/* MOBILE OVERLAY */}
       {isSidebarOpen && (
         <div 
           onClick={() => setIsSidebarOpen(false)}
@@ -56,9 +54,7 @@ export default function Layout() {
         ></div>
       )}
 
-      {/* ================================================= */}
-      {/* SIDEBAR (Responsive)                              */}
-      {/* ================================================= */}
+      {/* SIDEBAR */}
       <div className={`
         fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 text-white flex flex-col transition-transform duration-300 shadow-2xl
         lg:static lg:translate-x-0 lg:shadow-none
@@ -74,7 +70,6 @@ export default function Layout() {
                </p>
             </div>
           </div>
-          {/* Close Button (Mobile Only) */}
           <button 
             aria-label="Close Sidebar"
             onClick={() => setIsSidebarOpen(false)} 
@@ -90,12 +85,14 @@ export default function Layout() {
           
           {/* INSTRUCTOR FEATURES */}
           <NavItem to="/reservations" icon={<FaCalendarAlt />} label="Reservations" role="INSTRUCTOR" />
+          <NavItem to="/my-bookings" icon={<FaCalendarCheck />} label="Pickup Management" role="INSTRUCTOR" />
           <NavItem to="/users" icon={<FaUsers />} label="Users / Students" role="INSTRUCTOR" />
           <NavItem to="/economy" icon={<FaWallet />} label="Economy" role="INSTRUCTOR" />
 
-          {/* STUDENT FEATURES */}
-          <NavItem to="/my-bookings" icon={<FaCalendarAlt />} label="Book Lessons" role="STUDENT" />
-
+          {/* ✅ STUDENT FEATURES (UPDATED) */}
+          {/* 1. Link to the Calendar Page */}
+          <NavItem to="/book" icon={<FaCalendarAlt />} label="Book New Lesson" role="STUDENT" />          
+          <NavItem to="/economy" icon={<FaWallet />} label="Economy & Payment" role="STUDENT" /> {/* 👈 Added this for Students */}
           {/* COMMON COMMUNICATION */}
           <NavItem to="/inbox" icon={<FaEnvelope />} label="Inbox / Messages" />
           
@@ -111,7 +108,11 @@ export default function Layout() {
           </div>
           <NavItem to="/profile" icon={<FaUserCircle />} label="My Profile" />
         </nav>
-
+        {/* ✅ The Notification Bell Container */}
+        <div className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-800 transition-all cursor-pointer">
+            <NotificationBell userId={user.id} />
+            <span className="text-sm font-medium text-slate-300">Notifications</span>
+        </div>
         <div className="p-4 border-t border-slate-800">
           <button onClick={handleLogout} className="flex items-center gap-3 px-4 py-3 text-red-400 hover:bg-red-500/10 hover:text-red-300 w-full rounded transition">
             <FaSignOutAlt /> <span className="font-bold text-sm">Logout</span>
@@ -119,13 +120,10 @@ export default function Layout() {
         </div>
       </div>
 
-      {/* ================================================= */}
-      {/* MAIN CONTENT AREA                                 */}
-      {/* ================================================= */}
+      {/* MAIN CONTENT AREA */}
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
         <header className="bg-white shadow-sm h-16 flex items-center px-4 sm:px-8 justify-between shrink-0 z-10">
           
-          {/* Left Side: Mobile Menu Button + Breadcrumbs */}
           <div className="flex items-center gap-4">
             <button 
               aria-label="Open Sidebar"
@@ -142,7 +140,6 @@ export default function Layout() {
             </div>
           </div>
           
-          {/* Right Side: User Profile */}
           <div className="flex items-center gap-4">
              <div className="text-right hidden sm:block">
                 <p className="text-sm font-bold text-slate-700">{user.fullName}</p>
@@ -154,7 +151,6 @@ export default function Layout() {
           </div>
         </header>
 
-        {/* Content Body */}
         <main className="flex-1 overflow-auto p-4 sm:p-8 bg-slate-100">
           <Outlet />
         </main>
