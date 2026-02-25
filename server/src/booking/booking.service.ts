@@ -10,49 +10,61 @@ export class BookingService {
 
   // --- INVOICE METHODS ---
 
- async generateInvoice(data: { studentId: string, amount: number, dueDate: string, description: string }) {
-  if (data.studentId === 'ALL') {
-    const allStudents = await this.prisma.user.findMany({ where: { role: 'STUDENT' } });
-    const results: any[] = [];
-    
-    // Use a sequential loop to ensure each invoice gets a unique number
-    for (const student of allStudents) {
-      const uniqueSuffix = Date.now().toString().slice(-4); // Use last 4 digits of timestamp
-      const count = await this.prisma.invoice.count();
-      const invoiceNo = `INV-${new Date().getFullYear()}-${(count + 1).toString().padStart(3, '0')}-${uniqueSuffix}`;
+  async generateInvoice(data: { studentId: string, amount: number, dueDate: string, description: string }) {
+    const vatRate = 0.25; // Standard 25% VAT
+    const vatAmount = data.amount * vatRate;
+    const totalWithVat = data.amount + vatAmount;
+
+    if (data.studentId === 'ALL') {
+      const allStudents = await this.prisma.user.findMany({ where: { role: 'STUDENT' } });
+      const results: any[] = [];
       
-      const inv = await this.prisma.invoice.create({
-        data: {
-          invoiceNo,
-          studentId: student.id,
-          amount: data.amount,
-          dueDate: new Date(data.dueDate),
-          description: data.description,
-          status: 'PENDING'
-        }
-      });
-      results.push(inv);
+      for (const student of allStudents) {
+        const uniqueSuffix = Date.now().toString().slice(-4);
+        const count = await this.prisma.invoice.count();
+        const invoiceNo = `INV-${new Date().getFullYear()}-${(count + 1).toString().padStart(3, '0')}-${uniqueSuffix}`;
+        
+        const inv = await this.prisma.invoice.create({
+          data: {
+            invoiceNo,
+            studentId: student.id,
+            amount: data.amount, // Base Price
+            vatAmount: vatAmount, // ✅ New: Calculated VAT
+            totalWithVat: totalWithVat, // ✅ New: Total
+            studentPhone: student.phone || 'N/A', // ✅ New: Snapshot
+            studentAddress: student.address || 'N/A', // ✅ New: Snapshot
+            dueDate: new Date(data.dueDate),
+            description: data.description,
+            status: 'PENDING'
+          }
+        });
+        results.push(inv);
+      }
+      return { message: `${results.length} invoices generated successfully.` };
     }
-    return { message: `${results.length} invoices generated successfully.` };
+
+    // Logic for a Single Specific Student
+    const student = await this.prisma.user.findUnique({ where: { id: data.studentId } });
+    const uniqueSuffix = Date.now().toString().slice(-4);
+    const count = await this.prisma.invoice.count();
+    const invoiceNo = `INV-${new Date().getFullYear()}-${(count + 1).toString().padStart(3, '0')}-${uniqueSuffix}`;
+
+    return this.prisma.invoice.create({
+      data: {
+        invoiceNo,
+        studentId: data.studentId,
+        amount: data.amount,
+        vatAmount: vatAmount, // ✅ New
+        totalWithVat: totalWithVat, // ✅ New
+        studentPhone: student?.phone || 'N/A', // ✅ New
+        studentAddress: student?.address || 'N/A', // ✅ New
+        dueDate: new Date(data.dueDate),
+        description: data.description,
+        status: 'PENDING'
+      },
+      include: { student: true }
+    });
   }
-
-  // Logic for a Single Specific Student
-  const uniqueSuffix = Date.now().toString().slice(-4);
-  const count = await this.prisma.invoice.count();
-  const invoiceNo = `INV-${new Date().getFullYear()}-${(count + 1).toString().padStart(3, '0')}-${uniqueSuffix}`;
-
-  return this.prisma.invoice.create({
-    data: {
-      invoiceNo,
-      studentId: data.studentId,
-      amount: data.amount,
-      dueDate: new Date(data.dueDate),
-      description: data.description,
-      status: 'PENDING'
-    },
-    include: { student: true }
-  });
-}
 
   // ✅ ADDED: This fixes the Controller error
   async processInvoicePayment(invoiceId: string, proofUrl: string) {

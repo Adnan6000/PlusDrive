@@ -169,6 +169,10 @@ model Invoice {
   
   student      User     @relation(fields: [studentId], references: [id])
   description   String
+  vatAmount       Float?   @default(0)       // The calculated tax
+  totalWithVat    Float?   @default(0)       // amount + vatAmount
+  studentPhone    String?                    // Snapshot of hone time of billing
+  studentAddress  String?                    // Snapshot of address at time of billing
 }
 
 model Notification {

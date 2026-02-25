@@ -92,7 +92,6 @@ export default function Economy() {
     }
   };
 
-  // ✅ Added Handler for Instructor Decision
   const handleInstructorDecision = async (invId: string, status: 'PAID' | 'REJECTED') => {
     try {
       await api.put(`/booking/invoice/${invId}/status`, { status });
@@ -110,29 +109,75 @@ export default function Economy() {
     s.email.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // Helper to ensure date matches input exactly (removes timezone shift)
+  const formatDate = (dateString: string) => {
+    if (!dateString) return "";
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  };
+
   if (selectedInvoice) {
     return (
-      <div className="max-w-4xl mx-auto p-10 bg-white shadow-lg my-8 font-sans text-slate-800 border">
-        <button onClick={() => setSelectedInvoice(null)} className="mb-8 text-blue-600 font-bold" title="Close">← Close</button>
-        <div className="text-center mb-10"><h1 className="text-2xl font-bold">{bankInfo.schoolName}</h1></div>
-        <h2 className="text-5xl font-light mb-6 border-b pb-4 uppercase">Faktura</h2>
+      <div className="max-w-4xl mx-auto p-10 bg-white shadow-lg my-8 font-sans text-slate-800 border relative overflow-hidden">
+        {/* PAID WATERMARK */}
+        {selectedInvoice.status === 'PAID' && (
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-12 opacity-10 pointer-events-none border-[12px] border-green-600 p-6 rounded-xl">
+            <h1 className="text-9xl font-black text-green-600 uppercase">PAID</h1>
+          </div>
+        )}
+
+        <button onClick={() => setSelectedInvoice(null)} className="mb-8 text-blue-600 font-bold no-print" title="Close Invoice View">← Close</button>
+        
+        <div className="text-center mb-10"><h1 className="text-2xl font-bold uppercase">{bankInfo.schoolName}</h1></div>
+        
+        <h2 className="text-5xl font-light mb-6 border-b pb-4 uppercase">Invoice</h2>
+        
         <div className="grid grid-cols-2 gap-8 mb-10">
-          <div><p className="font-bold uppercase text-xs text-gray-400">Billed To:</p><p className="font-bold text-lg">{selectedInvoice.student?.fullName || user.fullName}</p></div>
+          <div>
+            <p className="font-bold uppercase text-xs text-gray-400">Billed To:</p>
+            <p className="font-bold text-lg">{selectedInvoice.student?.fullName || user.fullName}</p>
+            <p className="text-sm text-gray-600">{selectedInvoice.studentAddress || selectedInvoice.student?.address || "No address provided"}</p>
+            <p className="text-sm text-gray-600">{selectedInvoice.studentPhone || selectedInvoice.student?.phone || ""}</p>
+          </div>
           <div className="text-right uppercase text-xs font-bold">
             <p>Invoice No: <span className="font-normal">{selectedInvoice.invoiceNo}</span></p>
-            <p>Due Date: <span className="font-normal">{new Date(selectedInvoice.dueDate).toLocaleDateString()}</span></p>
+            <p>Due Date: <span className="font-bold text-red-600">{formatDate(selectedInvoice.dueDate)}</span></p>
           </div>
         </div>
+
         <table className="w-full border-t-2 border-black py-4 mb-6">
-          <thead><tr className="text-left text-xs uppercase font-bold text-gray-700 h-12 border-b"><th>Description</th><th className="text-right">Total Price</th></tr></thead>
-          <tbody><tr className="text-sm h-16 border-b"><td>{selectedInvoice.description}</td><td className="text-right font-bold">{selectedInvoice.amount.toLocaleString()},00 kr.</td></tr></tbody>
+          <thead><tr className="text-left text-xs uppercase font-bold text-gray-700 h-12 border-b"><th>Description</th><th className="text-right">Price (Excl. VAT)</th></tr></thead>
+          <tbody>
+            <tr className="text-sm h-16 border-b">
+              <td className="whitespace-pre-line">{selectedInvoice.description}</td>
+              <td className="text-right font-bold">{selectedInvoice.amount.toLocaleString()},00 kr.</td>
+            </tr>
+          </tbody>
         </table>
+
+        {/* VAT BREAKDOWN */}
+        <div className="flex justify-end mb-10">
+           <div className="w-64 space-y-2 text-sm">
+              <div className="flex justify-between text-gray-500">
+                <span>Subtotal:</span>
+                <span>{selectedInvoice.amount.toLocaleString()},00 kr.</span>
+              </div>
+              <div className="flex justify-between text-gray-500 border-b pb-2">
+                <span>VAT (25%):</span>
+                <span>{(selectedInvoice.vatAmount || (selectedInvoice.amount * 0.25)).toLocaleString()},00 kr.</span>
+              </div>
+              <div className="flex justify-between font-bold text-lg pt-2">
+                <span>Total:</span>
+                <span>{(selectedInvoice.totalWithVat || (selectedInvoice.amount * 1.25)).toLocaleString()},00 kr.</span>
+              </div>
+           </div>
+        </div>
+
         <div className="bg-gray-50 p-6 rounded-lg mb-10 border-l-4 border-black">
-          <p className="font-bold mb-2">Bank Transfer Details:</p>
+          <p className="font-bold mb-2 uppercase text-xs text-gray-400">Bank Transfer Details:</p>
           <p className="text-sm">Reg.nr.: <span className="font-bold">{bankInfo.bankRegNum}</span> Account No.: <span className="font-bold">{bankInfo.bankAccountNum}</span></p>
         </div>
 
-        {/* ✅ Updated Section: Shows Proof to Instructor or Upload to Student */}
         <div className="border-t pt-8 no-print">
           {isInstructor ? (
             <div className="space-y-4">
@@ -150,15 +195,16 @@ export default function Economy() {
                   <button 
                     onClick={() => window.open(selectedInvoice.proofUrl, '_blank')}
                     className="text-blue-600 text-xs font-bold flex items-center gap-1"
+                    title="View receipt in full screen"
                   >
                     <FaExternalLinkAlt /> View Full Image
                   </button>
                   {selectedInvoice.status === 'REVIEWING' && (
                     <div className="flex gap-4 pt-4 border-t">
-                      <button onClick={() => handleInstructorDecision(selectedInvoice.id, 'PAID')} className="bg-green-600 text-white px-6 py-2 rounded-full font-bold text-xs flex items-center gap-2">
+                      <button onClick={() => handleInstructorDecision(selectedInvoice.id, 'PAID')} className="bg-green-600 text-white px-6 py-2 rounded-full font-bold text-xs flex items-center gap-2" title="Approve this payment">
                         <FaCheckCircle /> Approve Payment
                       </button>
-                      <button onClick={() => handleInstructorDecision(selectedInvoice.id, 'REJECTED')} className="bg-red-600 text-white px-6 py-2 rounded-full font-bold text-xs flex items-center gap-2">
+                      <button onClick={() => handleInstructorDecision(selectedInvoice.id, 'REJECTED')} className="bg-red-600 text-white px-6 py-2 rounded-full font-bold text-xs flex items-center gap-2" title="Reject this payment">
                         <FaTimes /> Reject Proof
                       </button>
                     </div>
@@ -169,7 +215,6 @@ export default function Economy() {
               )}
             </div>
           ) : (
-            // Student View: Only show upload if status is PENDING
             selectedInvoice.status === 'PENDING' && (
               <div>
                 <label htmlFor="file-upload" className="block text-xs font-bold uppercase mb-4 text-gray-500 underline">Upload Payment Receipt</label>
@@ -177,12 +222,12 @@ export default function Economy() {
                   <input 
                     id="file-upload" 
                     type="file" 
-                    title="Select payment proof file" 
+                    title="Select payment proof image" 
                     className="text-xs"
                     onChange={(e) => setSelectedFile(e.target.files?.[0] || null)} 
                   />
                   {selectedFile && (
-                    <button onClick={() => handleUploadProof(selectedInvoice.id)} className="bg-blue-600 text-white px-8 py-2 rounded-full font-bold text-xs flex items-center gap-2">
+                    <button onClick={() => handleUploadProof(selectedInvoice.id)} className="bg-blue-600 text-white px-8 py-2 rounded-full font-bold text-xs flex items-center gap-2" title="Submit receipt to instructor">
                       <FaCheckCircle /> Submit Receipt
                     </button>
                   )}
@@ -190,21 +235,19 @@ export default function Economy() {
               </div>
             )
           )}
-          {/* Status badge for the formal view */}
-          <div className="mt-4">
+          <div className="mt-4 flex justify-between items-center">
              <span className={`text-xs font-bold uppercase ${selectedInvoice.status === 'PAID' ? 'text-green-600' : 'text-orange-600'}`}>
                 Status: {selectedInvoice.status}
              </span>
+             <button onClick={() => window.print()} className="text-xs font-bold text-gray-400 uppercase hover:text-black no-print" title="Print this invoice">Print Invoice</button>
           </div>
         </div>
       </div>
     );
   }
 
-  // --- 4. MAIN DASHBOARD ---
   return (
     <div className="space-y-6 p-4">
-      {/* ... keep your existing dashboard render logic here ... */}
       {isInstructor && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
@@ -214,32 +257,41 @@ export default function Economy() {
             <div className="space-y-4">
               <div className="relative">
                 <FaSearch className="absolute left-3 top-3 text-slate-300" aria-hidden="true" />
-                <input id="search-box" title="Search for student" className="w-full border pl-10 p-2 rounded-lg text-sm" placeholder="Search by name/email..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+                <label htmlFor="search-box" className="sr-only">Search Students</label>
+                <input id="search-box" title="Search for student by name or email" className="w-full border pl-10 p-2 rounded-lg text-sm" placeholder="Search by name/email..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
               </div>
-              <select id="select-student" title="Choose student" disabled={applyToAll} className="w-full border p-2 rounded-lg text-sm bg-white" value={invStudentId} onChange={e => setInvStudentId(e.target.value)}>
+              <label htmlFor="select-student" className="sr-only">Select Student</label>
+              <select id="select-student" title="Choose a student for this invoice" disabled={applyToAll} className="w-full border p-2 rounded-lg text-sm bg-white" value={invStudentId} onChange={e => setInvStudentId(e.target.value)}>
                 <option value="">-- {filteredStudents.length} students found --</option>
                 {filteredStudents.map(s => <option key={s.id} value={s.id}>{s.fullName}</option>)}
               </select>
               <div className="flex items-center gap-2">
-                <input id="all-check" type="checkbox" title="Apply invoice to everyone" checked={applyToAll} onChange={e => setApplyToAll(e.target.checked)} />
-                <label htmlFor="all-check" className="text-sm font-bold text-blue-600 flex items-center gap-1 cursor-pointer"><FaUsers /> Apply to all students</label>
+                <input id="all-check" type="checkbox" title="Check to send invoice to all students" checked={applyToAll} onChange={e => setApplyToAll(e.target.checked)} />
+                <label htmlFor="all-check" className="text-sm font-bold text-blue-600 flex items-center gap-1 cursor-pointer"><FaUsers aria-hidden="true" /> Apply to all students</label>
               </div>
-              <textarea id="desc-box" title="Description of charge" className="w-full border p-2 rounded-lg text-sm h-20" value={invDesc} onChange={e => setInvDesc(e.target.value)} />
+              <label htmlFor="desc-box" className="sr-only">Description</label>
+              <textarea id="desc-box" title="Description of lesson or package" className="w-full border p-2 rounded-lg text-sm h-20" placeholder="Description..." value={invDesc} onChange={e => setInvDesc(e.target.value)} />
               <div className="grid grid-cols-2 gap-4">
-                <input id="price-box" title="Price in DKK" type="number" className="border p-2 rounded-lg text-sm" value={invPrice} onChange={e => setInvPrice(e.target.value)} />
-                <input id="date-box" title="Payment due date" type="date" className="border p-2 rounded-lg text-sm" value={invDueDate} onChange={e => setInvDueDate(e.target.value)} />
+                <div className="space-y-1">
+                  <label htmlFor="price-box" className="text-[10px] font-bold text-gray-400 uppercase">Price DKK (Excl. VAT)</label>
+                  <input id="price-box" title="Base price before tax" type="number" className="w-full border p-2 rounded-lg text-sm" value={invPrice} onChange={e => setInvPrice(e.target.value)} />
+                </div>
+                <div className="space-y-1">
+                  <label htmlFor="date-box" className="text-[10px] font-bold text-gray-400 uppercase">Due Date</label>
+                  <input id="date-box" title="Select the payment deadline" type="date" className="w-full border p-2 rounded-lg text-sm" value={invDueDate} onChange={e => setInvDueDate(e.target.value)} />
+                </div>
               </div>
-              <button onClick={handleGenerateInvoice} className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold shadow-lg">Generate Invoice</button>
+              <button onClick={handleGenerateInvoice} className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold shadow-lg" title="Generate and send invoice">Generate Invoice</button>
             </div>
           </div>
           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm h-fit">
             <h4 className="font-bold mb-4 flex items-center gap-2"><FaUniversity aria-hidden="true" /> Bank Settings</h4>
             <div className="space-y-3">
               <label htmlFor="regNum" className="text-[10px] font-bold text-gray-400 block uppercase">Reg.nr.</label>
-              <input id="regNum" title="Bank Reg number" className="w-full border p-2 text-sm rounded" value={bankInfo.bankRegNum} onChange={e => setBankInfo({...bankInfo, bankRegNum: e.target.value})} />
+              <input id="regNum" title="Bank Registration number" className="w-full border p-2 text-sm rounded" value={bankInfo.bankRegNum} onChange={e => setBankInfo({...bankInfo, bankRegNum: e.target.value})} />
               <label htmlFor="accNum" className="text-[10px] font-bold text-gray-400 block uppercase">Kontonr.</label>
-              <input id="accNum" title="Account number" className="w-full border p-2 text-sm rounded" value={bankInfo.bankAccountNum} onChange={e => setBankInfo({...bankInfo, bankAccountNum: e.target.value})} />
-              <button onClick={handleUpdateBankInfo} className="w-full bg-slate-800 text-white py-2 text-xs font-bold rounded flex items-center justify-center gap-2"><FaSave /> Save Bank info</button>
+              <input id="accNum" title="Bank Account number" className="w-full border p-2 text-sm rounded" value={bankInfo.bankAccountNum} onChange={e => setBankInfo({...bankInfo, bankAccountNum: e.target.value})} />
+              <button onClick={handleUpdateBankInfo} className="w-full bg-slate-800 text-white py-2 text-xs font-bold rounded flex items-center justify-center gap-2" title="Save these bank details"><FaSave aria-hidden="true" /> Save Bank info</button>
             </div>
           </div>
         </div>
@@ -253,7 +305,7 @@ export default function Economy() {
             <thead className="bg-gray-50 text-gray-400 uppercase text-[10px] font-bold">
               <tr className="border-b">
                 <th className="p-4">Invoice No</th>
-                <th className="p-4">Amount</th>
+                <th className="p-4">Amount (Incl. VAT)</th>
                 <th className="p-4">Status</th>
                 <th className="p-4 text-right">View</th>
               </tr>
@@ -262,7 +314,7 @@ export default function Economy() {
               {invoices.length > 0 ? invoices.map(inv => (
                 <tr key={inv.id} className="border-b hover:bg-slate-50 transition-colors">
                   <td className="p-4 font-bold text-blue-600">{inv.invoiceNo}</td>
-                  <td className="p-4 font-medium">{inv.amount.toLocaleString()} kr.</td>
+                  <td className="p-4 font-medium">{(inv.totalWithVat || (inv.amount * 1.25)).toLocaleString()} kr.</td>
                   <td className="p-4">
                     <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${
                       inv.status === 'PAID' ? 'bg-green-100 text-green-700' : 
