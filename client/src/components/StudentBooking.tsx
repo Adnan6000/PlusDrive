@@ -36,34 +36,62 @@ export default function StudentBooking() {
 
   const fixDateDisplay = (dateString: string) => {
     if (!dateString) return '';
-    const date = new Date(dateString);
-    const bufferedDate = new Date(date.getTime() + (12 * 60 * 60 * 1000));
-    return bufferedDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }); 
+    // ✅ Extract the YYYY-MM-DD part directly to avoid timezone offsets
+    const date = new Date(dateString.split('T')[0]);
+    return date.toLocaleDateString('en-GB', { 
+      day: 'numeric', 
+      month: 'short', 
+      year: 'numeric' 
+    }); 
   };
 
+
   const getGoogleCalendarUrl = (dateStr: string, startTime: string, endTime: string) => {
-    const dateObj = new Date(dateStr);
-    const yyyy = dateObj.getFullYear();
-    const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
-    const dd = String(dateObj.getDate()).padStart(2, '0');
-    const startSimple = startTime.replace(':', '') + '00';
-    const endSimple = endTime.replace(':', '') + '00';
-    return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=Driving+Lesson&dates=${yyyy}${mm}${dd}T${startSimple}/${yyyy}${mm}${dd}T${endSimple}&details=Driving+Lesson+with+DriveBook`;
+    // 1. Extract only the YYYY-MM-DD part and remove dashes
+    // This prevents the date from "jumping" days due to the user's local timezone
+    const datePart = dateStr.split('T')[0].replace(/-/g, '');
+    
+    // 2. Normalize time (handles both dots and colons)
+    // We remove separators and add '00' for seconds as required by Google
+    const startSimple = startTime.replace(/[:.]/g, '') + '00';
+    const endSimple = endTime.replace(/[:.]/g, '') + '00';
+    
+    // 3. Return the universal template URL
+    // Dates format: YYYYMMDDTHHMMSS/YYYYMMDDTHHMMSS
+    return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=Driving+Lesson&dates=${datePart}T${startSimple}/${datePart}T${endSimple}&details=Driving+Lesson+with+DriveBook`;
   };
 
   const downloadIcs = (dateStr: string, startTime: string, endTime: string) => {
-    const dateObj = new Date(dateStr);
+    // 1. Normalize the date from the API to avoid day-shifting
+    const dateObj = new Date(dateStr.split('T')[0]); 
     const yyyy = dateObj.getFullYear();
     const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
     const dd = String(dateObj.getDate()).padStart(2, '0');
-    const startSimple = startTime.replace(':', '') + '00';
-    const endSimple = endTime.replace(':', '') + '00';
-    const icsContent = `BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nSUMMARY:Driving Lesson\nDTSTART;TZID=Asia/Karachi:${yyyy}${mm}${dd}T${startSimple}\nDTEND;TZID=Asia/Karachi:${yyyy}${mm}${dd}T${endSimple}\nDESCRIPTION:Driving Lesson with DriveBook\nEND:VEVENT\nEND:VCALENDAR`;
-    const blob = new Blob([icsContent], { type: 'text/calendar' });
+
+    // 2. Clean time strings (handles both dots and colons)
+    const startSimple = startTime.replace(':', '').replace('.', '') + '00';
+    const endSimple = endTime.replace(':', '').replace('.', '') + '00';
+
+    // 3. Generate ICS without hardcoded TZID
+    // We remove ";TZID=Asia/Karachi" so the calendar app uses the local device time.
+    const icsContent = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//DriveBook//Driving Lessons//EN',
+      'BEGIN:VEVENT',
+      `SUMMARY:Driving Lesson with DriveBook`,
+      `DTSTART:${yyyy}${mm}${dd}T${startSimple}`,
+      `DTEND:${yyyy}${mm}${dd}T${endSimple}`,
+      `DESCRIPTION:Driving Lesson scheduled via PlusDrive App.`,
+      'END:VEVENT',
+      'END:VCALENDAR'
+    ].join('\n');
+
+    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', 'lesson.ics');
+    link.setAttribute('download', `lesson-${yyyy}${mm}${dd}.ics`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -91,12 +119,15 @@ export default function StudentBooking() {
 
   const isSameDay = (calendarDate: Date, apiDateString: string) => {
     if (!apiDateString) return false;
-    const apiDate = new Date(apiDateString);
-    const bufferedApiDate = new Date(apiDate.getTime() + (12 * 60 * 60 * 1000));
-    const year = calendarDate.getFullYear();
-    const month = String(calendarDate.getMonth() + 1).padStart(2, '0');
-    const day = String(calendarDate.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}` === bufferedApiDate.toISOString().split('T')[0]; 
+
+    // 1. Convert calendar date to 'YYYY-MM-DD' (e.g., "2026-03-01")
+    const calendarDateStr = calendarDate.toLocaleDateString('en-CA');
+
+    // 2. Extract the date part from the API string (handles "2026-03-01T00:00:00.000Z")
+    const apiDateStr = apiDateString.split('T')[0];
+
+    // 3. Compare the two plain strings
+    return calendarDateStr === apiDateStr;
   };
 
   const daySlots = slots.filter(s => isSameDay(date, s.date));

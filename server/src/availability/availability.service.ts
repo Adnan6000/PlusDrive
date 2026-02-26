@@ -6,14 +6,33 @@ export class AvailabilityService {
   private prisma = new PrismaClient();
 
   // Add Slot (Prevent Duplicates)
-  async addAvailability(adminId: string, date: Date, startTime: string, endTime: string) {
+  async addAvailability(adminId: string, dateStr: string, startTime: string, endTime: string) {
+  // 1. Convert the string to a midnight-aligned date to avoid overlap bugs
+    const targetDate = new Date(dateStr);
+    targetDate.setHours(0, 0, 0, 0);
+
+    // 2. Check for existing slot with exact same parameters
     const existing = await this.prisma.availability.findFirst({
-      where: { adminId, date: date, startTime }
+      where: {
+        adminId,
+        date: targetDate,
+        startTime,
+        endTime
+      }
     });
-    if (existing) throw new BadRequestException('Slot already exists');
+
+    if (existing) {
+      throw new BadRequestException('Slot already exists for this time.');
+    }
 
     return this.prisma.availability.create({
-      data: { adminId, date, startTime, endTime, isBooked: false }
+      data: {
+        adminId,
+        date: targetDate,
+        startTime,
+        endTime,
+        isBooked: false
+      }
     });
   }
 

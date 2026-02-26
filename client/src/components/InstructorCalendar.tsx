@@ -52,17 +52,28 @@ export default function InstructorCalendar() {
   };
 
   const addSlot = async () => {
-    // 1. Validate End Time > Start Time
-    if (endTime <= startTime) { 
+    // 1. Normalize time format (replace dots with colons)
+    const cleanStart = startTime.replace('.', ':');
+    const cleanEnd = endTime.replace('.', ':');
+
+    // 2. Convert to numeric hours for accurate comparison
+    const [startH, startM] = cleanStart.split(':').map(Number);
+    const [endH, endM] = cleanEnd.split(':').map(Number);
+    
+    const startTimeInMinutes = startH * 60 + startM;
+    // If end hour is 00 (midnight), treat it as 24:00 for the comparison logic
+    const adjustedEndH = endH === 0 ? 24 : endH;
+    const endTimeInMinutes = adjustedEndH * 60 + endM;
+
+    if (endTimeInMinutes <= startTimeInMinutes) { 
         alert("End Time must be after Start Time"); 
         return; 
     }
 
-    // 2. Validate Past Time (The Fix)
+    // 3. Validate Past Time with Timezone Safety
     const now = new Date();
     const selectedSlotStart = new Date(date);
-    const [h, m] = startTime.split(':');
-    selectedSlotStart.setHours(parseInt(h), parseInt(m), 0, 0);
+    selectedSlotStart.setHours(startH, startM, 0, 0);
 
     if (selectedSlotStart < now) {
         alert("You cannot add a slot in the past!");
@@ -71,25 +82,38 @@ export default function InstructorCalendar() {
 
     try {
       await api.post('/availability/add', {
-        adminId: user.id, date: date, startTime: startTime, endTime: endTime 
+        adminId: user.id, 
+        // Force YYYY-MM-DD to stop the "Slot already exists" timezone bug
+        date: date.toLocaleDateString('en-CA'), 
+        startTime: cleanStart, 
+        endTime: cleanEnd 
       });
       fetchData();
       alert("Slot Added Successfully");
-    } catch (err) { alert('Slot already exists.'); }
+    } catch (err: any) { // Fixed TS18046 'unknown' error
+      const errorMsg = err.response?.data?.message || 'Slot already exists or overlaps.';
+      alert(errorMsg); 
+    }
   };
 
   const deleteSlot = async (id: string) => {
-    if (!confirm("Delete this slot?")) return;
+    if (!window.confirm("Are you sure you want to delete this slot?")) return;
     try {
+      // Ensuring the delete request is clean
       await api.delete(`/availability/${id}`);
       fetchData();
-    } catch (error) { alert("Cannot delete a booked slot!"); }
+    } catch (err: any) {
+      alert(err.response?.data?.message || "Cannot delete a booked slot!");
+    }
   };
 
+  // ✅ FIX: Use string-based comparison to match your addSlot logic
   const getBooking = (slotDate: string, sTime: string) => {
-    return bookings.find(b => new Date(b.date).toDateString() === new Date(slotDate).toDateString() && b.startTime === sTime);
+    return bookings.find(b => b.date.split('T')[0] === slotDate.split('T')[0] && b.startTime === sTime);
   };
-  const daySlots = slots.filter(s => new Date(s.date).toDateString() === date.toDateString());
+
+  // ✅ FIX: Filter slots based on the flat YYYY-MM-DD string
+  const daySlots = slots.filter(s => s.date.split('T')[0] === date.toLocaleDateString('en-CA'));
 
   return (
     <div className="space-y-6">
@@ -140,15 +164,20 @@ export default function InstructorCalendar() {
                 <div>
                    <label htmlFor="start-time" className="block text-xs font-bold text-slate-500 mb-1">Start Time</label>
                    <input 
-                      id="start-time" type="time" 
-                      value={startTime} onChange={e => setStartTime(e.target.value)} 
+                      id="start-time" 
+                      type="time" 
+                      step="60" // Forces minutes only, sometimes cleans up the mask
+                      value={startTime} 
+                      onChange={e => setStartTime(e.target.value)} 
                       className="w-full border p-2 rounded bg-white outline-none"
-                   />
+                    />
                 </div>
                 <div>
                    <label htmlFor="end-time" className="block text-xs font-bold text-slate-500 mb-1">End Time</label>
                    <input 
-                      id="end-time" type="time" 
+                      id="end-time" 
+                      type="time" 
+                      step="60" // Forces minutes only, sometimes cleans up the mask
                       value={endTime} onChange={e => setEndTime(e.target.value)} 
                       className="w-full border p-2 rounded bg-white outline-none"
                    />
