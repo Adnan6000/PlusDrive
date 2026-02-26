@@ -7,7 +7,9 @@ export class AvailabilityController {
 
   @Post('add')
   async add(@Body() data: { adminId: string; date: string; startTime: string; endTime: string }) {
-    return this.service.addAvailability(data.adminId, new Date(data.date), data.startTime, data.endTime);
+    // ✅ FIX: Pass data.date as a string. Do NOT wrap it in new Date() here.
+    // This prevents the timezone from shifting the day forward or backward.
+    return this.service.addAvailability(data.adminId, data.date, data.startTime, data.endTime);
   }
 
   @Get('/:adminId')
