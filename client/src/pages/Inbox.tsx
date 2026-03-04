@@ -1,10 +1,11 @@
-import { useEffect, useState, useRef, useLayoutEffect } from 'react';
+import { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import api from '../api/axios';
 import { useSearchParams } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'; // ✅ Added for speed
 import { encryptMessage, decryptMessage } from '../utils/crypto';
 import {
   FaPaperPlane, FaSearch, FaCommentDots,
-  FaCheck, FaCheckDouble, FaExclamationCircle, FaArrowLeft,
+  FaCheck, FaCheckDouble, FaArrowLeft,
   FaPlus, FaImage, FaMapMarkerAlt, FaFileAlt, FaChalkboardTeacher, FaUserGraduate,
   FaEllipsisV, FaTrash, FaTimes, FaCheckSquare
 } from 'react-icons/fa';
@@ -12,9 +13,8 @@ import {
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 export default function Inbox() {
-  const [contacts, setContacts] = useState<any[]>([]);
+  const queryClient = useQueryClient();
   const [activeChat, setActiveChat] = useState<any>(null);
-  const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState('');
 
   // UI STATES
@@ -29,34 +29,55 @@ export default function Inbox() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const chatContainerRef = useRef<HTMLDivElement>(null);
 
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const isInstructor = user.role === 'INSTRUCTOR' || user.role === 'ADMIN';
   const [searchParams] = useSearchParams();
 
-  const prevMsgCount = useRef(0);
+  // ✅ 1. Optimized Contacts Fetching
+  const { data: contacts = [] } = useQuery({
+    queryKey: ['inbox-contacts', user.id],
+    queryFn: async () => {
+      const res = await api.get(`/messages/inbox/${user.id}`);
+      return res.data;
+    },
+    refetchInterval: 10000, // Refresh sidebar every 10s
+  });
+
+  // ✅ 2. Optimized Message Fetching
+  const { data: messages = [] } = useQuery({
+    queryKey: ['conversation', user.id, activeChat?.id],
+    queryFn: async () => {
+      const res = await api.get(`/messages/conversation/${user.id}/${activeChat.id}`);
+      return res.data.filter((m: any) => {
+        if (m.senderId === user.id && m.deletedBySender) return false;
+        if (m.receiverId === user.id && m.deletedByReceiver) return false;
+        return true;
+      });
+    },
+    enabled: !!activeChat?.id,
+    refetchInterval: 3000, // Poll for new messages every 3s
+  });
+
+  // ✅ 3. Message Sending Mutation (Instant UI feedback)
+  const sendMessageMutation = useMutation({
+    mutationFn: (payload: any) => api.post('/messages/send', payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['conversation', user.id, activeChat?.id] });
+      queryClient.invalidateQueries({ queryKey: ['inbox-contacts'] });
+    }
+  });
 
   useLayoutEffect(() => {
-    if (messages.length > prevMsgCount.current && !isSelectionMode) {
+    if (!isSelectionMode) {
       scrollRef.current?.scrollIntoView({ behavior: "smooth" });
     }
-    prevMsgCount.current = messages.length;
-  }, [messages, isSelectionMode]);
+  }, [messages.length, isSelectionMode]);
 
   useEffect(() => {
-    fetchContacts();
     const chatWithId = searchParams.get('chatWith');
     if (chatWithId) startChatWithUser(chatWithId);
-  }, []);
-
-  useEffect(() => {
-    if (activeChat) {
-      fetchMessages(activeChat.id);
-      const interval = setInterval(() => fetchMessages(activeChat.id), 3000);
-      return () => clearInterval(interval);
-    }
-  }, [activeChat]);
+  }, [searchParams]);
 
   useEffect(() => {
     const search = async () => {
@@ -69,7 +90,7 @@ export default function Inbox() {
     };
     const delay = setTimeout(search, 500);
     return () => clearTimeout(delay);
-  }, [searchQuery]);
+  }, [searchQuery, isInstructor]);
 
   const getRoleBadge = (role: string) => {
     const isTeacher = role === 'ADMIN' || role === 'INSTRUCTOR';
@@ -94,33 +115,13 @@ export default function Inbox() {
     return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
   };
 
-  const fetchContacts = async () => {
-    try { const res = await api.get(`/messages/inbox/${user.id}`); setContacts(res.data); } catch (e) { }
-  };
-
   const startChatWithUser = async (userId: string) => {
     try {
       const res = await api.get(`/auth/user/${userId}`);
       const targetUser = res.data;
-      const exists = contacts.find(c => c.id === targetUser.id);
-      if (!exists) {
-        const newContact = { id: targetUser.id, name: targetUser.fullName, role: targetUser.role, email: targetUser.email };
-        setContacts(prev => [newContact, ...prev]);
-        setActiveChat(newContact);
-      } else { setActiveChat(exists); }
+      const exists = contacts.find((c: any) => c.id === targetUser.id);
+      setActiveChat(exists || { id: targetUser.id, name: targetUser.fullName, role: targetUser.role, email: targetUser.email });
       setSearchQuery(''); setSearchResults([]);
-    } catch (e) { }
-  };
-
-  const fetchMessages = async (otherId: string) => {
-    try {
-      const res = await api.get(`/messages/conversation/${user.id}/${otherId}`);
-      const visibleMessages = res.data.filter((m: any) => {
-        if (m.senderId === user.id && m.deletedBySender) return false;
-        if (m.receiverId === user.id && m.deletedByReceiver) return false;
-        return true;
-      });
-      setMessages(visibleMessages);
     } catch (e) { }
   };
 
@@ -128,44 +129,38 @@ export default function Inbox() {
     if (!window.confirm("Are you sure? This will clear the chat history for YOU only.")) return;
     try {
       await api.post('/messages/clear', { userId: user.id, otherId: activeChat.id });
-      setMessages([]);
+      queryClient.setQueryData(['conversation', user.id, activeChat.id], []);
       setShowChatMenu(false);
     } catch (e) { alert("Failed to clear chat"); }
   };
 
   const handleDeleteSelected = async () => {
     if (!window.confirm(`Delete ${selectedMsgIds.length} messages for yourself?`)) return;
-    setMessages(prev => prev.filter(m => !selectedMsgIds.includes(m.id)));
     setIsSelectionMode(false);
+    const idsToDelete = [...selectedMsgIds];
     setSelectedMsgIds([]);
-    for (const msgId of selectedMsgIds) {
-      await api.post('/messages/delete', { messageId: msgId, userId: user.id, type: 'ME' });
-    }
+    
+    try {
+      for (const msgId of idsToDelete) {
+        await api.post('/messages/delete', { messageId: msgId, userId: user.id, type: 'ME' });
+      }
+      queryClient.invalidateQueries({ queryKey: ['conversation', user.id, activeChat.id] });
+    } catch (e) { alert("Error deleting messages"); }
   };
 
   const toggleSelection = (msgId: string) => {
-    if (selectedMsgIds.includes(msgId)) {
-      setSelectedMsgIds(prev => prev.filter(id => id !== msgId));
-    } else {
-      setSelectedMsgIds(prev => [...prev, msgId]);
-    }
+    setSelectedMsgIds(prev => prev.includes(msgId) ? prev.filter(id => id !== msgId) : [...prev, msgId]);
   };
 
   const handleSendMessage = async (e: any) => {
     e.preventDefault();
     if (!newMessage.trim() || !activeChat) return;
-    setShowAttachments(false);
-    const tempId = Date.now();
-    const tempMsg = { id: tempId, senderId: user.id, content: newMessage, createdAt: new Date().toISOString(), isRead: false, status: 'sending' };
-    
-    setMessages(prev => [...prev, tempMsg]);
+    const content = newMessage;
     setNewMessage('');
-    try {
-      const encryptedContent = encryptMessage(tempMsg.content);
-      const res = await api.post('/messages/send', { senderId: user.id, receiverId: activeChat.id, content: encryptedContent, isChat: true });
-      setMessages(prev => prev.map(m => m.id === tempId ? { ...res.data, status: 'sent' } : m));
-      fetchContacts();
-    } catch (e) { setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'failed' } : m)); }
+    setShowAttachments(false);
+
+    const encryptedContent = encryptMessage(content);
+    sendMessageMutation.mutate({ senderId: user.id, receiverId: activeChat.id, content: encryptedContent, isChat: true });
   };
 
   const handleFileSelect = async (e: any) => {
@@ -178,48 +173,22 @@ export default function Inbox() {
     formData.append('receiverId', activeChat.id);
     const type = file.type.startsWith('image/') ? 'IMAGE' : 'DOCUMENT';
     formData.append('type', type);
-    const tempId = Date.now();
-    const tempMsg = { id: tempId, senderId: user.id, content: `Sending ${type.toLowerCase()}...`, attachmentType: type, attachmentUrl: URL.createObjectURL(file), createdAt: new Date().toISOString(), isRead: false, status: 'sending' };
-    setMessages(prev => [...prev, tempMsg]);
+
     try {
-      const res = await api.post('/messages/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
-      setMessages(prev => prev.map(m => m.id === tempId ? { ...res.data, status: 'sent' } : m));
-    } catch (err) { alert("File upload failed"); setMessages(prev => prev.filter(m => m.id !== tempId)); }
+      await api.post('/messages/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+      queryClient.invalidateQueries({ queryKey: ['conversation', user.id, activeChat.id] });
+    } catch (err) { alert("File upload failed"); }
   };
 
   const handleLocation = () => {
-  if (!navigator.geolocation) return alert("Geolocation not supported");
-  
-  navigator.geolocation.getCurrentPosition(async (pos) => {
-    const { latitude, longitude } = pos.coords;
-    
-    // ✅ CORRECTED URL: Standard Google Maps format
-    const mapUrl = `https://www.google.com/maps?q=${latitude},${longitude}`;
-    
-    const tempId = Date.now();
-    setMessages(prev => [...prev, { 
-      id: tempId, 
-      senderId: user.id, 
-      content: mapUrl, 
-      createdAt: new Date().toISOString(), 
-      status: 'sending' 
-    }]);
-
-    try {
-      // Logic: Send the clean URL to the database
-      await api.post('/messages/send', { 
-        senderId: user.id, 
-        receiverId: activeChat.id, 
-        content: mapUrl, 
-        isChat: true 
-      });
-      fetchMessages(activeChat.id);
-    } catch (e) {
-      console.error("Failed to send location", e);
-    }
-  });
-  setShowAttachments(false);
-};
+    if (!navigator.geolocation) return alert("Geolocation not supported");
+    navigator.geolocation.getCurrentPosition(async (pos) => {
+      const { latitude, longitude } = pos.coords;
+      const mapUrl = `https://www.google.com/maps?q=${latitude},${longitude}`; // Standard URL
+      sendMessageMutation.mutate({ senderId: user.id, receiverId: activeChat.id, content: encryptMessage(mapUrl), isChat: true });
+    });
+    setShowAttachments(false);
+  };
 
   const triggerFileUpload = () => { fileInputRef.current?.click(); }
 
@@ -231,13 +200,7 @@ export default function Inbox() {
 
   return (
     <div className="flex h-[80vh] md:h-[calc(100vh-140px)] bg-slate-50 border border-slate-200 rounded-2xl shadow-2xl overflow-hidden font-sans relative">
-      <input
-        type="file"
-        ref={fileInputRef}
-        onChange={handleFileSelect}
-        className="hidden"
-        title="Upload attachment"
-      />
+      <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" title="Upload attachment" />
 
       {/* SIDEBAR */}
       <div className={`w-full md:w-1/3 border-r border-slate-200 flex flex-col bg-white absolute inset-0 md:static z-20 transition-transform duration-300 ${activeChat ? '-translate-x-full md:translate-x-0' : 'translate-x-0'}`}>
@@ -246,14 +209,7 @@ export default function Inbox() {
           {isInstructor && (
             <div className="relative">
               <FaSearch className="absolute left-3 top-3 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Search students..."
-                title="Search students"
-                className="w-full pl-10 pr-4 py-2 rounded-xl border border-slate-200 bg-slate-100 focus:bg-white focus:outline-none transition-all"
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-              />
+              <input type="text" placeholder="Search students..." title="Search students" className="w-full pl-10 pr-4 py-2 rounded-xl border border-slate-200 bg-slate-100 focus:bg-white focus:outline-none transition-all" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
               {searchResults.length > 0 && (
                 <div className="absolute top-full left-0 w-full bg-white border border-slate-200 shadow-2xl rounded-xl mt-2 z-50 overflow-hidden">
                   {searchResults.map(s => (
@@ -268,7 +224,7 @@ export default function Inbox() {
           )}
         </div>
         <div className="flex-1 overflow-y-auto p-3 space-y-2">
-          {contacts.map(contact => (
+          {contacts.map((contact: any) => (
             <div key={contact.id} onClick={() => setActiveChat(contact)} className={`p-3 flex items-center gap-3 cursor-pointer rounded-xl transition-all border ${activeChat?.id === contact.id ? 'bg-blue-50 border-blue-200' : 'bg-transparent border-transparent hover:bg-slate-50'}`}>
               <div className="h-12 w-12 rounded-full flex items-center justify-center text-white font-bold bg-slate-500 shrink-0">{contact.name?.charAt(0) || contact.fullName?.charAt(0) || '?'}</div>
               <div className="flex-1 overflow-hidden">
@@ -300,9 +256,7 @@ export default function Inbox() {
                     <button onClick={() => { setIsSelectionMode(false); setSelectedMsgIds([]); }} title="Cancel selection" className="p-2 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200"><FaTimes /></button>
                   </div>
                 ) : (
-                  <button onClick={() => setShowChatMenu(!showChatMenu)} title="Chat Menu" className="p-2 text-slate-500 rounded-full hover:bg-slate-100">
-                    <FaEllipsisV />
-                  </button>
+                  <button onClick={() => setShowChatMenu(!showChatMenu)} title="Chat Menu" className="p-2 text-slate-500 rounded-full hover:bg-slate-100"><FaEllipsisV /></button>
                 )}
                 {showChatMenu && (
                   <div className="absolute right-0 top-12 bg-white shadow-2xl rounded-xl border border-slate-100 w-48 z-50">
@@ -313,61 +267,36 @@ export default function Inbox() {
               </div>
             </div>
 
-            <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] bg-fixed">
-              {messages.map((msg, index) => {
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50">
+              {messages.map((msg: any, index: number) => {
                 const isMe = msg.senderId === user.id;
                 const showDateSeparator = index === 0 || getDayLabel(msg.createdAt) !== getDayLabel(messages[index - 1].createdAt);
-                const isDeleted = msg.isDeletedEveryone;
                 const isSelected = selectedMsgIds.includes(msg.id);
-                
-                // Decrypt content
                 const decryptedContent = decryptMessage(msg.content);
-                // logic: Detect system status emojis
-                const isSystemMessage = decryptedContent?.includes('✅') || decryptedContent?.includes('📍');
 
                 return (
                   <div key={msg.id}>
                     {showDateSeparator && (
                       <div className="flex justify-center my-4"><span className="bg-slate-200 text-slate-600 text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-widest">{getDayLabel(msg.createdAt)}</span></div>
                     )}
-                    <div className={`flex items-end gap-2 ${isMe ? 'flex-row-reverse' : 'flex-row'} ${isSystemMessage ? 'justify-center' : ''}`}>
-                      {isSelectionMode && !isSystemMessage && (
+                    <div className={`flex items-end gap-2 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
+                      {isSelectionMode && (
                         <div onClick={() => toggleSelection(msg.id)} title="Toggle Selection" className={`h-5 w-5 rounded border cursor-pointer flex items-center justify-center transition-all ${isSelected ? 'bg-blue-500 border-blue-500 text-white' : 'border-slate-300 bg-white'}`}>
                           {isSelected && <FaCheck size={10} />}
                         </div>
                       )}
-                      
-                      <div className={`relative ${isSystemMessage ? 'max-w-full bg-blue-50 border border-blue-100 text-blue-800 italic mx-auto text-center' : 'max-w-[85%] md:max-w-[75%] shadow-sm'} p-3 rounded-2xl text-sm ${isDeleted ? 'bg-slate-100 text-slate-400 italic' : isMe && !isSystemMessage ? 'bg-blue-600 text-white rounded-br-none' : !isSystemMessage ? 'bg-white text-slate-800 border rounded-bl-none' : ''}`}>
-                        {!isDeleted && msg.attachmentType === 'IMAGE' && (
-                          <img src={getAssetUrl(msg.attachmentUrl)} alt="attachment" className="mb-2 rounded-lg max-h-60 w-full object-cover" />
-                        )}
-                        {!isDeleted && msg.attachmentType === 'DOCUMENT' && (
-                          <div className="flex items-center gap-2 bg-black/10 p-2 rounded-lg mb-1">
-                            <FaFileAlt /><a href={getAssetUrl(msg.attachmentUrl)} target="_blank" rel="noreferrer" className="underline font-bold text-xs truncate">Download File</a>
-                          </div>
-                        )}
+                      <div className={`max-w-[85%] md:max-w-[75%] p-3 rounded-2xl text-sm shadow-sm ${isMe ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white text-slate-800 border rounded-bl-none'}`}>
+                        {msg.attachmentType === 'IMAGE' && <img src={getAssetUrl(msg.attachmentUrl)} alt="attachment" className="mb-2 rounded-lg max-h-60 w-full object-cover" />}
+                        {msg.attachmentType === 'DOCUMENT' && <div className="flex items-center gap-2 bg-black/10 p-2 rounded-lg mb-1"><FaFileAlt /><a href={getAssetUrl(msg.attachmentUrl)} target="_blank" rel="noreferrer" className="underline font-bold text-xs truncate">Download</a></div>}
                         <p className="break-words whitespace-pre-wrap leading-relaxed">
-                          {/* ✅ Updated to detect the standard google.com/maps URL */}
                           {decryptedContent?.includes('google.com/maps') ? (
-                            <a 
-                              href={decryptedContent} 
-                              target="_blank" 
-                              rel="noopener noreferrer" 
-                              className="text-blue-500 underline font-bold flex items-center gap-1"
-                              title="Open location in Google Maps"
-                            >
-                              <FaMapMarkerAlt /> View Location
-                            </a>
+                            <a href={decryptedContent} target="_blank" rel="noopener noreferrer" className="text-blue-400 underline font-bold flex items-center gap-1"><FaMapMarkerAlt /> View Location</a>
                           ) : decryptedContent}
                         </p>
-                        {!isSystemMessage && (
-                           <div className={`flex items-center justify-end gap-1 mt-1 text-[10px] ${isMe && !isDeleted ? 'text-blue-100' : 'text-slate-400'}`}>
-                             <span>{new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                             {isMe && !isDeleted && (
-                               <span className="opacity-90">{msg.status === 'failed' ? <FaExclamationCircle /> : msg.status === 'sending' ? '...' : msg.isRead ? <FaCheckDouble /> : <FaCheck />}</span>
-                             )}
-                           </div>
-                        )}
+                        <div className={`flex items-center justify-end gap-1 mt-1 text-[10px] ${isMe ? 'text-blue-100' : 'text-slate-400'}`}>
+                           <span>{new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                           {isMe && <span className="opacity-90">{msg.isRead ? <FaCheckDouble /> : <FaCheck />}</span>}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -376,42 +305,18 @@ export default function Inbox() {
               <div ref={scrollRef} />
             </div>
 
-            {/* FIXED MOBILE INPUT BAR - SEND BUTTON ALWAYS VISIBLE */}
-            <div className="p-3 bg-white border-t border-slate-200 shrink-0">
-              <form onSubmit={handleSendMessage} className="flex gap-2 items-center w-full max-w-full">
-                <button 
-                  type="button" 
-                  onClick={() => setShowAttachments(!showAttachments)} 
-                  title="Show Attachments"
-                  className={`p-3 rounded-full transition-all shrink-0 ${showAttachments ? 'bg-slate-800 text-white rotate-45' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
-                >
-                  <FaPlus />
-                </button>
-                
+            <div className="p-3 bg-white border-t border-slate-200">
+              <form onSubmit={handleSendMessage} className="flex gap-2 items-center">
+                <button type="button" onClick={() => setShowAttachments(!showAttachments)} title="Show Attachments" className={`p-3 rounded-full transition-all ${showAttachments ? 'bg-slate-800 text-white rotate-45' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}><FaPlus /></button>
                 {showAttachments && (
                   <div className="absolute bottom-20 left-4 bg-white rounded-xl shadow-2xl border border-slate-100 p-2 flex flex-col gap-1 z-50 w-40">
-                    <button type="button" onClick={triggerFileUpload} title="Send Photo" className="flex items-center gap-2 p-2 hover:bg-slate-50 rounded text-sm font-bold text-slate-600"><FaImage className="text-blue-500" /> Photo</button>
-                    <button type="button" onClick={handleLocation} title="Send Location" className="flex items-center gap-2 p-2 hover:bg-slate-50 rounded text-sm font-bold text-slate-600"><FaMapMarkerAlt className="text-green-500" /> Location</button>
-                    <button type="button" onClick={triggerFileUpload} title="Send Document" className="flex items-center gap-2 p-2 hover:bg-slate-50 rounded text-sm font-bold text-slate-600"><FaFileAlt className="text-red-500" /> Document</button>
+                    <button type="button" onClick={triggerFileUpload} className="flex items-center gap-2 p-2 hover:bg-slate-50 rounded text-sm font-bold text-slate-600"><FaImage className="text-blue-500" /> Photo</button>
+                    <button type="button" onClick={handleLocation} className="flex items-center gap-2 p-2 hover:bg-slate-50 rounded text-sm font-bold text-slate-600"><FaMapMarkerAlt className="text-green-500" /> Location</button>
+                    <button type="button" onClick={triggerFileUpload} className="flex items-center gap-2 p-2 hover:bg-slate-50 rounded text-sm font-bold text-slate-600"><FaFileAlt className="text-red-500" /> Document</button>
                   </div>
                 )}
-
-                <input
-                  type="text"
-                  placeholder="Message..."
-                  title="Message Content"
-                  className="flex-1 min-w-0 p-3 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none text-sm transition-all"
-                  value={newMessage}
-                  onChange={e => setNewMessage(e.target.value)}
-                />
-                
-                <button 
-                  type="submit" 
-                  title="Send Message"
-                  className="bg-blue-600 text-white p-3 rounded-xl shadow-md hover:bg-blue-700 active:translate-y-0.5 transition-all shrink-0 flex items-center justify-center"
-                >
-                  <FaPaperPlane />
-                </button>
+                <input type="text" placeholder="Message..." title="Message Content" className="flex-1 p-3 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white outline-none text-sm" value={newMessage} onChange={e => setNewMessage(e.target.value)} />
+                <button type="submit" title="Send Message" className="bg-blue-600 text-white p-3 rounded-xl shadow-md hover:bg-blue-700 active:translate-y-0.5 transition-all"><FaPaperPlane /></button>
               </form>
             </div>
           </>

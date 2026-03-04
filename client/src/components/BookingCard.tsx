@@ -60,7 +60,7 @@ export default function BookingCard({ booking }: BookingCardProps) {
 
     // Open External Maps
     const openInMaps = () => {
-        const url = `https://www.google.com/maps/search/?api=1&query=$${displayLat},${displayLng}`;
+        const url = `https://www.google.com/maps/search/?api=1&query=${displayLat},${displayLng}`;
         window.open(url, '_blank');
     };
 

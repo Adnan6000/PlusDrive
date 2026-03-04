@@ -16,16 +16,14 @@ let DefaultIcon = L.icon({
 });
 L.Marker.prototype.options.icon = DefaultIcon;
 
-// Helper to move the map view when coordinates change
 function ChangeView({ center }: { center: [number, number] }) {
     const map = useMap();
     useEffect(() => {
-        map.setView(center, 16); // Zooms into the new pin location
+        map.setView(center, 16); 
     }, [center, map]);
     return null;
 }
 
-// Helper component to handle clicks on the map
 function MapClickHandler({ onLocationSelect }: { onLocationSelect: (lat: number, lng: number) => void }) {
     useMapEvents({
         click(e) {
@@ -48,11 +46,11 @@ export default function LocationPicker({ initialLat, initialLng, initialAddress,
         initialLat && initialLng ? [initialLat, initialLng] : null
     );
     const [address, setAddress] = useState(initialAddress || '');
-    const [loading, setLoading] = useState(false); // ✅ Restored Loading State
+    const [loading, setLoading] = useState(false); 
 
-    const defaultCenter: [number, number] = [30.1575, 71.5249]; 
+    // ✅ FIXED: Set Default Center to Copenhagen, Denmark
+    const defaultCenter: [number, number] = [55.6761, 12.5683]; 
 
-    // ✅ FIXED: Fetch Live Location AND Readable Address
     const handleGetLiveLocation = () => {
         if (!navigator.geolocation) return alert("Geolocation not supported");
         setLoading(true);
@@ -65,17 +63,14 @@ export default function LocationPicker({ initialLat, initialLng, initialAddress,
                 setPosition(newPos);
 
                 try {
-                    // Fetch readable address from OpenStreetMap
                     const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
                     const data = await res.json();
                     const readableAddress = data.display_name || `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
                     
                     setAddress(readableAddress);
-                    // ✅ CRITICAL: Notify parent (StudentBooking) immediately so "Send Request" works
                     if (onLocationChange) onLocationChange(latitude, longitude, readableAddress);
                 } catch (error) {
                     console.error("Address fetch error", error);
-                    // Fallback to coordinates as address if API fails
                     const coordAddr = `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
                     setAddress(coordAddr);
                     if (onLocationChange) onLocationChange(latitude, longitude, coordAddr);
@@ -95,7 +90,6 @@ export default function LocationPicker({ initialLat, initialLng, initialAddress,
         if (readOnly) return;
         setPosition([lat, lng]);
         
-        // When clicking the map, we also try to get the address for that point
         try {
             const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
             const data = await res.json();
@@ -121,14 +115,15 @@ export default function LocationPicker({ initialLat, initialLng, initialAddress,
                 <label className="block text-sm font-bold text-gray-700 mb-1">
                     {readOnly ? "Selected Location" : "Pickup Address"}
                 </label>
-                <div className="flex gap-2">
+                {/* ✅ FIXED: Applied flex-1 and min-w-0 to prevent button overlap */}
+                <div className="flex items-center gap-2 w-full">
                     <input
                         type="text"
                         value={address}
                         onChange={handleAddressChange}
                         disabled={readOnly || loading}
                         placeholder={loading ? "Fetching address..." : "Type or use GPS icon..."}
-                        className="flex-1 p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                        className="flex-1 min-w-0 p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                     />
                     
                     {!readOnly && (
@@ -155,13 +150,8 @@ export default function LocationPicker({ initialLat, initialLng, initialAddress,
                         attribution='&copy; OpenStreetMap contributors'
                         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                     />
-                    
-                    {/* Move camera and zoom in */}
                     {position && <ChangeView center={position} />}
-                    
                     {!readOnly && <MapClickHandler onLocationSelect={handleMapClick} />}
-                    
-                    {/* Show the blue pin */}
                     {position && <Marker position={position} />}
                 </MapContainer>
             </div>

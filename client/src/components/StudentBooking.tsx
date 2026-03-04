@@ -1,19 +1,19 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
 import api from '../api/axios';
+import { useQuery, useQueryClient } from '@tanstack/react-query'; // ✅ Added for speed optimization
 import { 
   FaChalkboardTeacher, FaCalendarCheck, FaTimes, FaSync, 
   FaCommentDots, FaGoogle, FaApple, FaMapMarkerAlt
-} from 'react-icons/fa'; // Removed FaInfoCircle
+} from 'react-icons/fa';
 import LocationPicker from '../components/LocationPicker';
 
 export default function StudentBooking() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [date, setDate] = useState(new Date());
-  const [slots, setSlots] = useState<any[]>([]);
-  const [instructors, setInstructors] = useState<any[]>([]);
   const [selectedInstructor, setSelectedInstructor] = useState('');
   
   // MODAL & PICKUP STATE
@@ -21,10 +21,11 @@ export default function StudentBooking() {
   const [selectedSlot, setSelectedSlot] = useState<any>(null);
   const [bookingNote, setBookingNote] = useState('');
   
+  // ✅ FIX: Default coordinates set to Denmark
   const [pickupData, setPickupData] = useState({
     address: '',
-    lat: 30.1575,
-    lng: 71.5249
+    lat: 55.6761, 
+    lng: 12.5683 
   });
 
   const user = JSON.parse(localStorage.getItem('user') || '{}');
@@ -34,57 +35,54 @@ export default function StudentBooking() {
     .react-calendar__tile { padding: 10px 0; }
   `;
 
+  // ✅ OPTIMIZED: Instructor Fetching
+  const { data: instructors = [] } = useQuery({
+    queryKey: ['instructors', user.schoolId],
+    queryFn: async () => {
+      const res = await api.get(`/auth/school-instructors/${user.schoolId || 'all'}`);
+      if (res.data.length > 0 && !selectedInstructor) setSelectedInstructor(res.data[0].id);
+      return res.data;
+    },
+    staleTime: 1000 * 60 * 30, // Instructors list rarely changes
+  });
+
+  // ✅ OPTIMIZED: Slots Fetching
+  const { data: slots = [], isLoading: loadingSlots } = useQuery({
+    queryKey: ['availability', selectedInstructor],
+    queryFn: async () => {
+      const res = await api.get(`/availability/${selectedInstructor}`);
+      return res.data;
+    },
+    enabled: !!selectedInstructor,
+    staleTime: 1000 * 60 * 5, // Cache slots for 5 minutes
+  });
+
   const fixDateDisplay = (dateString: string) => {
     if (!dateString) return '';
-    // ✅ Extract the YYYY-MM-DD part directly to avoid timezone offsets
     const date = new Date(dateString.split('T')[0]);
-    return date.toLocaleDateString('en-GB', { 
-      day: 'numeric', 
-      month: 'short', 
-      year: 'numeric' 
-    }); 
+    return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }); 
   };
 
-
   const getGoogleCalendarUrl = (dateStr: string, startTime: string, endTime: string) => {
-    // 1. Extract only the YYYY-MM-DD part and remove dashes
-    // This prevents the date from "jumping" days due to the user's local timezone
     const datePart = dateStr.split('T')[0].replace(/-/g, '');
-    
-    // 2. Normalize time (handles both dots and colons)
-    // We remove separators and add '00' for seconds as required by Google
     const startSimple = startTime.replace(/[:.]/g, '') + '00';
     const endSimple = endTime.replace(/[:.]/g, '') + '00';
-    
-    // 3. Return the universal template URL
-    // Dates format: YYYYMMDDTHHMMSS/YYYYMMDDTHHMMSS
     return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=Driving+Lesson&dates=${datePart}T${startSimple}/${datePart}T${endSimple}&details=Driving+Lesson+with+DriveBook`;
   };
 
   const downloadIcs = (dateStr: string, startTime: string, endTime: string) => {
-    // 1. Normalize the date from the API to avoid day-shifting
     const dateObj = new Date(dateStr.split('T')[0]); 
     const yyyy = dateObj.getFullYear();
     const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
     const dd = String(dateObj.getDate()).padStart(2, '0');
+    const startSimple = startTime.replace(/[:.]/g, '') + '00';
+    const endSimple = endTime.replace(/[:.]/g, '') + '00';
 
-    // 2. Clean time strings (handles both dots and colons)
-    const startSimple = startTime.replace(':', '').replace('.', '') + '00';
-    const endSimple = endTime.replace(':', '').replace('.', '') + '00';
-
-    // 3. Generate ICS without hardcoded TZID
-    // We remove ";TZID=Asia/Karachi" so the calendar app uses the local device time.
     const icsContent = [
-      'BEGIN:VCALENDAR',
-      'VERSION:2.0',
-      'PRODID:-//DriveBook//Driving Lessons//EN',
-      'BEGIN:VEVENT',
-      `SUMMARY:Driving Lesson with DriveBook`,
-      `DTSTART:${yyyy}${mm}${dd}T${startSimple}`,
-      `DTEND:${yyyy}${mm}${dd}T${endSimple}`,
-      `DESCRIPTION:Driving Lesson scheduled via PlusDrive App.`,
-      'END:VEVENT',
-      'END:VCALENDAR'
+      'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//DriveBook//Driving Lessons//EN',
+      'BEGIN:VEVENT', `SUMMARY:Driving Lesson with DriveBook`,
+      `DTSTART:${yyyy}${mm}${dd}T${startSimple}`, `DTEND:${yyyy}${mm}${dd}T${endSimple}`,
+      `DESCRIPTION:Driving Lesson scheduled via PlusDrive App.`, 'END:VEVENT', 'END:VCALENDAR'
     ].join('\n');
 
     const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
@@ -97,67 +95,39 @@ export default function StudentBooking() {
     document.body.removeChild(link);
   };
 
-  const fetchInstructors = async () => {
-    try {
-          // Changed from /any to /school-instructors/all or your specific school ID
-          const res = await api.get(`/auth/school-instructors/${user.schoolId || 'all'}`);
-          setInstructors(res.data);
-          if(res.data.length > 0 && !selectedInstructor) setSelectedInstructor(res.data[0].id);
-      } catch (e) { console.error(e); }
-    };
-
-  const fetchSlots = async () => {
-    if (!selectedInstructor) return;
-    try {
-        const res = await api.get(`/availability/${selectedInstructor}`);
-        setSlots(res.data);
-    } catch (e) { console.error(e); }
-  };
-
-  useEffect(() => { fetchInstructors(); }, []);
-  useEffect(() => { fetchSlots(); }, [selectedInstructor]);
-
   const isSameDay = (calendarDate: Date, apiDateString: string) => {
     if (!apiDateString) return false;
-
-    // 1. Convert calendar date to 'YYYY-MM-DD' (e.g., "2026-03-01")
-    const calendarDateStr = calendarDate.toLocaleDateString('en-CA');
-
-    // 2. Extract the date part from the API string (handles "2026-03-01T00:00:00.000Z")
-    const apiDateStr = apiDateString.split('T')[0];
-
-    // 3. Compare the two plain strings
-    return calendarDateStr === apiDateStr;
+    return calendarDate.toLocaleDateString('en-CA') === apiDateString.split('T')[0];
   };
 
-  const daySlots = slots.filter(s => isSameDay(date, s.date));
-  const tileContent = ({ date, view }: any) => (view === 'month' && slots.some(s => isSameDay(date, s.date) && !s.isBooked)) ? <div className="h-2 w-2 bg-green-500 rounded-full mx-auto mt-1 shadow-sm"></div> : null;
+  const daySlots = slots.filter((s: any) => isSameDay(date, s.date));
+  
+  const tileContent = ({ date, view }: any) => (
+    view === 'month' && slots.some((s: any) => isSameDay(date, s.date) && !s.isBooked)
+  ) ? <div className="h-2 w-2 bg-green-500 rounded-full mx-auto mt-1 shadow-sm"></div> : null;
 
   const handleSlotClick = (slot: any) => {
     setSelectedSlot(slot);
     setBookingNote('');
-    setPickupData({ address: '', lat: 30.1575, lng: 71.5249 });
+    setPickupData({ address: '', lat: 55.6761, lng: 12.5683 });
     setShowModal(true);
   };
 
   const submitBooking = async () => {
-    if (!selectedSlot) return;
-    if (!pickupData.address) return alert("Please specify a requested pickup location on the map.");
-
+    if (!selectedSlot || !pickupData.address) return alert("Please specify a pickup location.");
     try {
       await api.post('/booking/request', {
         studentId: user.id,
         availabilityId: selectedSlot.id,
         type: 'Driving',
-        note: bookingNote,
         reqLocation: pickupData.address,
         reqLat: pickupData.lat,
         reqLng: pickupData.lng,
         studentNote: bookingNote
       });
-      alert("Booking Request Sent with Pickup Request!");
+      alert("Booking Request Sent!");
       setShowModal(false);
-      fetchSlots(); 
+      queryClient.invalidateQueries({ queryKey: ['availability'] }); 
     } catch (error) { alert("Booking failed. Slot might be taken."); }
   };
 
@@ -173,7 +143,6 @@ export default function StudentBooking() {
                <label htmlFor="instructor-select" className="block text-sm font-bold text-slate-700 mb-2 flex items-center gap-2">
                  <FaChalkboardTeacher className="text-blue-600"/> Select Instructor
                </label>
-               {/* ✅ ADDED title for select accessibility */}
                <select 
                  id="instructor-select"
                  title="Select Instructor" 
@@ -181,11 +150,11 @@ export default function StudentBooking() {
                  value={selectedInstructor} 
                  onChange={e => setSelectedInstructor(e.target.value)}
                >
-                 {instructors.map(i => <option key={i.id} value={i.id}>{i.fullName}</option>)}
+                 {instructors.map((i: any) => <option key={i.id} value={i.id}>{i.fullName}</option>)}
                </select>
             </div>
-            <button onClick={fetchSlots} className="text-sm flex items-center gap-2 text-blue-600 font-bold px-4 py-2 bg-blue-50 rounded-full transition">
-              <FaSync /> Refresh
+            <button onClick={() => queryClient.invalidateQueries({ queryKey: ['availability'] })} className="text-sm flex items-center gap-2 text-blue-600 font-bold px-4 py-2 bg-blue-50 rounded-full transition">
+              <FaSync className={loadingSlots ? 'animate-spin' : ''} /> Refresh
             </button>
         </div>
 
@@ -201,7 +170,7 @@ export default function StudentBooking() {
               <FaCalendarCheck className="text-blue-600" /> Available Slots: <span className="text-slate-500 font-normal ml-1">{date.toDateString()}</span>
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-              {daySlots.map(slot => {
+              {daySlots.map((slot: any) => {
                   const isMyBooking = slot.booking?.studentId === user.id || slot.studentId === user.id;
                   const isPending = isMyBooking && slot.booking?.status === 'PENDING';
                   const isTaken = slot.isBooked && !isMyBooking;
@@ -213,10 +182,8 @@ export default function StudentBooking() {
                       </span>
                       {isMyBooking && (
                         <div className="flex gap-2 mt-3 w-full justify-center border-t pt-2 border-black/5">
-                           {/* ✅ ADDED title for accessibility */}
                            <button title="Message Instructor" onClick={(e) => { e.stopPropagation(); handleMessageClick(slot.adminId); }} className="p-2 bg-blue-100 text-blue-600 rounded-full hover:bg-blue-200"><FaCommentDots /></button>
                            {!isPending && <>
-                             {/* ✅ ADDED title for accessibility */}
                              <a title="Add to Google Calendar" href={getGoogleCalendarUrl(slot.date, slot.startTime, slot.endTime)} target="_blank" rel="noreferrer" className="p-2 bg-red-100 text-red-600 rounded-full" onClick={(e) => e.stopPropagation()}><FaGoogle /></a>
                              <button title="Download Apple Calendar File" onClick={(e) => { e.stopPropagation(); downloadIcs(slot.date, slot.startTime, slot.endTime); }} className="p-2 bg-slate-200 text-slate-700 rounded-full"><FaApple /></button>
                            </>}
@@ -235,7 +202,6 @@ export default function StudentBooking() {
           <div className="bg-white p-6 rounded-2xl shadow-2xl w-full max-w-lg animate-in fade-in zoom-in duration-200">
             <div className="flex justify-between items-center mb-6 border-b pb-4">
               <h3 className="text-xl font-bold text-slate-800">Confirm Booking & Pickup</h3>
-              {/* ✅ ADDED title for accessibility */}
               <button title="Close" onClick={() => setShowModal(false)} className="p-2 hover:bg-slate-100 rounded-full transition"><FaTimes className="text-slate-400" /></button>
             </div>
             
@@ -249,9 +215,7 @@ export default function StudentBooking() {
                 <h4 className="font-bold text-sm text-slate-700 flex items-center gap-2">
                     <FaMapMarkerAlt className="text-red-500" /> Pickup Location Request
                 </h4>
-                <LocationPicker 
-                    onLocationChange={(lat, lng, addr) => setPickupData({ address: addr, lat, lng })}
-                />
+                <LocationPicker onLocationChange={(lat, lng, addr) => setPickupData({ address: addr, lat, lng })} />
               </div>
 
               <div>
@@ -259,16 +223,13 @@ export default function StudentBooking() {
                 <textarea 
                   id="pickup-note"
                   className="w-full border p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none h-24 resize-none bg-slate-50 transition text-sm"
-                  placeholder="e.g. I will be wearing a red jacket at the bus stop..."
+                  placeholder="e.g. I will be waiting at the main entrance..."
                   value={bookingNote}
                   onChange={e => setBookingNote(e.target.value)}
                 />
               </div>
 
-              <button 
-                onClick={submitBooking} 
-                className="w-full bg-blue-600 text-white py-3.5 rounded-xl font-bold hover:bg-blue-700 shadow-lg shadow-blue-200 transition-all transform hover:-translate-y-0.5"
-              >
+              <button onClick={submitBooking} className="w-full bg-blue-600 text-white py-3.5 rounded-xl font-bold hover:bg-blue-700 shadow-lg shadow-blue-200 transition-all transform hover:-translate-y-0.5">
                 Send Request
               </button>
             </div>

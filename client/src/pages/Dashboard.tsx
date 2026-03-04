@@ -1,35 +1,34 @@
-import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query'; // ✅ Added TanStack Query
 import api from '../api/axios';
 import BookingRequests from '../components/BookingRequests'; 
 import { FaUserGraduate, FaCalendarCheck, FaClock, FaClipboardList } from 'react-icons/fa';
 import { useNavigate } from 'react-router-dom';
 
 export default function Dashboard() {
-  const [stats, setStats] = useState({ 
-    title1: 'Loading...', val1: 0, 
-    title2: 'Loading...', val2: 0, 
-    title3: 'Loading...', val3: 0 
-  });
-  
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const navigate = useNavigate();
   const isInstructor = user.role === 'INSTRUCTOR' || user.role === 'ADMIN';
 
-  useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        const res = await api.get(`/booking/stats/${user.id}`);
-        setStats(res.data);
-      } catch (e) { console.error(e); }
-    };
-    fetchStats();
-  }, [user.id]);
+  // ✅ Optimized Data Fetching with Caching
+  const { data: stats = { title1: 'Pending', val1: 0, title2: 'Upcoming', val2: 0, title3: 'Total', val3: 0 }, isLoading } = useQuery({
+    queryKey: ['dashboard-stats', user.id],
+    queryFn: async () => {
+      const res = await api.get(`/booking/stats/${user.id}`);
+      return res.data;
+    },
+    enabled: !!user.id, // Only fetch if user ID exists
+    staleTime: 1000 * 60 * 2, // Consider data fresh for 2 minutes
+  });
 
   const StatCard = ({ title, value, icon, color }: any) => (
-    <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200 flex items-center justify-between">
+    <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200 flex items-center justify-between transition-all hover:shadow-md">
       <div>
-        <h3 className="text-slate-500 font-bold text-xs uppercase tracking-wider">{title}</h3>
-        <p className={`text-3xl font-bold mt-1 ${color}`}>{value}</p>
+        <h3 className="text-slate-500 font-bold text-xs uppercase tracking-wider">
+          {isLoading ? 'Loading...' : title}
+        </h3>
+        <p className={`text-3xl font-bold mt-1 ${color}`}>
+          {isLoading ? '...' : value}
+        </p>
       </div>
       <div className="text-slate-200 text-4xl">{icon}</div>
     </div>
@@ -50,20 +49,18 @@ export default function Dashboard() {
           
           {!isInstructor && (
             <button 
-              onClick={() => navigate('/my-bookings')}
+              onClick={() => navigate('/book')} // ✅ Corrected path to /book
               className="mt-6 bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded-lg font-bold transition shadow-lg shadow-blue-900/50"
             >
               Book a Lesson
             </button>
           )}
         </div>
-        {/* Background Decor */}
         <div className="absolute top-0 right-0 -mt-4 -mr-4 w-32 h-32 bg-white opacity-5 rounded-full blur-2xl"></div>
       </div>
 
       {/* 2. STATS GRID (Dynamic based on Role) */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Card 1: Pending / Action Required */}
         <StatCard 
           title={stats.title1} 
           value={stats.val1} 
@@ -71,7 +68,6 @@ export default function Dashboard() {
           color="text-orange-500" 
         />
         
-        {/* Card 2: Today / Upcoming */}
         <StatCard 
           title={stats.title2} 
           value={stats.val2} 
@@ -79,7 +75,6 @@ export default function Dashboard() {
           color="text-blue-600" 
         />
 
-        {/* Card 3: Total Students / Completed */}
         <StatCard 
           title={stats.title3} 
           value={stats.val3} 
@@ -99,7 +94,6 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* 4. STUDENT ONLY: Quick Tips or Call to Action */}
       {!isInstructor && (
         <div className="bg-blue-50 border border-blue-100 p-6 rounded-lg text-center">
           <h3 className="text-blue-800 font-bold text-lg">Need more practice?</h3>

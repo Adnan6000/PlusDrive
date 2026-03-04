@@ -20,32 +20,31 @@ export default function StudentBooking() {
   const [showModal, setShowModal] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<any>(null);
   const [bookingNote, setBookingNote] = useState('');
+  
+  // ✅ FIX: Default coordinates set to Denmark (Copenhagen)
   const [pickupData, setPickupData] = useState({
     address: '',
-    lat: 30.1575,
-    lng: 71.5249
+    lat: 55.6761, 
+    lng: 12.5683 
   });
   
   const user = JSON.parse(localStorage.getItem('user') || '{}');
 
-  // ✅ CSS: Force Calendar to be Mobile Responsive
   const calendarStyle = `
     .react-calendar { width: 100% !important; max-width: 100%; background: white; border: none; font-family: inherit; line-height: 1.125em; }
     .react-calendar__tile { padding: 10px 0; }
     .react-calendar__navigation button { font-size: 1.2rem; font-weight: bold; }
   `;
 
-  // HELPER: Fix Date Display
+  // ✅ FIX: Standardized Date Display to prevent timezone jumping
   const fixDateDisplay = (dateString: string) => {
     if (!dateString) return '';
-    const date = new Date(dateString);
-    const bufferedDate = new Date(date.getTime() + (12 * 60 * 60 * 1000));
-    return bufferedDate.toLocaleDateString('en-GB', { 
+    const date = new Date(dateString.split('T')[0]);
+    return date.toLocaleDateString('en-GB', { 
       day: 'numeric', month: 'short', year: 'numeric' 
     }); 
   };
 
-  // 1. Fetch Instructors
   useEffect(() => {
     const fetchInstructors = async () => {
         try {
@@ -59,7 +58,6 @@ export default function StudentBooking() {
     fetchInstructors();
   }, [selectedInstructor]);
 
-  // 2. Fetch Slots
   useEffect(() => {
     fetchSlots();
   }, [selectedInstructor]);
@@ -74,28 +72,21 @@ export default function StudentBooking() {
     finally { setLoading(false); }
   };
 
-  // 3. Match Slots to Day
+  // ✅ FIX: Reliable String-based day matching
   const isSameDay = (calendarDate: Date, apiDateString: string) => {
     if (!apiDateString) return false;
-    const d1 = new Date(calendarDate);
-    const d2 = new Date(apiDateString);
-    return d1.getFullYear() === d2.getFullYear() &&
-           d1.getMonth() === d2.getMonth() &&
-           d1.getDate() === d2.getDate();
+    return calendarDate.toLocaleDateString('en-CA') === apiDateString.split('T')[0];
   };
 
-  // 4. FILTER SLOTS
   const daySlots = slots.filter(s => {
     if (!isSameDay(date, s.date)) return false;
     const now = new Date();
     const slotDate = new Date(s.date);
-    const [hours, minutes] = s.startTime.split(':');
+    const [hours, minutes] = s.startTime.replace('.', ':').split(':');
     slotDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
-    if (slotDate < now) return false;
-    return true;
+    return slotDate >= now;
   });
 
-  // 5. Calendar Dots
   const tileContent = ({ date, view }: any) => {
     if (view === 'month' && slots.some(s => isSameDay(date, s.date) && !s.isBooked)) {
        return <div className="h-2 w-2 bg-green-500 rounded-full mx-auto mt-1 shadow-sm"></div>;
@@ -106,7 +97,8 @@ export default function StudentBooking() {
   const handleSlotClick = (slot: any) => {
     setSelectedSlot(slot);
     setBookingNote('');
-    setPickupData({ address: '', lat: 30.1575, lng: 71.5249 });
+    // Reset to Denmark defaults on modal open
+    setPickupData({ address: '', lat: 55.6761, lng: 12.5683 });
     setShowModal(true);
   };
 
@@ -136,8 +128,6 @@ export default function StudentBooking() {
       <style>{calendarStyle}</style>
 
       <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200 min-h-[500px]">
-        
-        {/* HEADER */}
         <div className="mb-6 flex flex-col sm:flex-row gap-4 items-end sm:items-center justify-between border-b pb-6">
             <div className="w-full sm:max-w-md">
                <label htmlFor="instructor-select" className="block text-sm font-bold text-slate-700 mb-2 flex items-center gap-2">
@@ -164,7 +154,6 @@ export default function StudentBooking() {
             </button>
         </div>
 
-        {/* CALENDAR & GRID */}
         <div className="flex flex-col lg:flex-row gap-8">
           <div className="w-full lg:w-1/3">
             <div className="bg-slate-50 p-4 rounded-lg border border-slate-100">
@@ -175,10 +164,6 @@ export default function StudentBooking() {
                     minDate={new Date()} 
                     className="w-full border-none shadow-sm rounded-lg p-2" 
                 />
-                <div className="mt-4 flex items-center justify-center gap-2 text-xs text-slate-500">
-                    <div className="h-2 w-2 bg-green-500 rounded-full"></div>
-                    <span>Dates with available slots</span>
-                </div>
             </div>
           </div>
 
@@ -193,14 +178,8 @@ export default function StudentBooking() {
                   const myBooking = slot.booking; 
                   const isMyBooking = (myBooking?.studentId === user.id || slot.studentId === user.id) && myBooking?.status !== 'REJECTED';
                   
-                  // ✅ Using the BookingCard for slots owned by the student
                   if (isMyBooking) {
-                    return (
-                      <BookingCard 
-                        key={slot.id} 
-                        booking={{...slot, ...myBooking}} 
-                      />
-                    );
+                    return <BookingCard key={slot.id} booking={{...slot, ...myBooking}} />;
                   }
 
                   const isTaken = slot.isBooked;
@@ -233,17 +212,12 @@ export default function StudentBooking() {
         </div>
       </div>
 
-      {/* MODAL */}
       {showModal && selectedSlot && (
         <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 backdrop-blur-sm p-4 overflow-y-auto">
           <div className="bg-white p-6 rounded-2xl shadow-2xl w-full max-w-lg scale-100 transform transition-all my-auto">
             <div className="flex justify-between items-center mb-6 border-b pb-4">
               <h3 className="text-xl font-bold text-slate-800">Confirm Booking & Pickup</h3>
-              <button 
-                onClick={() => setShowModal(false)} 
-                title="Close Modal"
-                className="p-2 hover:bg-slate-100 rounded-full transition"
-              >
+              <button onClick={() => setShowModal(false)} title="Close Modal" className="p-2 hover:bg-slate-100 rounded-full transition">
                 <FaTimes className="text-slate-400 hover:text-red-500" />
               </button>
             </div>
@@ -264,6 +238,7 @@ export default function StudentBooking() {
                 <h4 className="font-bold text-sm text-slate-700 flex items-center gap-2">
                     <FaMapMarkerAlt className="text-red-500" /> Requested Pickup Location
                 </h4>
+                {/* ✅ FIX: Removed invalid defaultLat/Lng props to resolve TS2322 */}
                 <LocationPicker 
                     onLocationChange={(lat, lng, addr) => setPickupData({ address: addr, lat, lng })}
                 />
@@ -279,10 +254,7 @@ export default function StudentBooking() {
                 />
               </div>
 
-              <button 
-                onClick={submitBooking} 
-                className="w-full bg-blue-600 text-white py-3.5 rounded-xl font-bold hover:bg-blue-700 shadow-lg shadow-blue-200 hover:shadow-blue-300 transition-all transform hover:-translate-y-0.5"
-              >
+              <button onClick={submitBooking} className="w-full bg-blue-600 text-white py-3.5 rounded-xl font-bold hover:bg-blue-700 shadow-lg shadow-blue-200 transition-all transform hover:-translate-y-0.5">
                 Send Request
               </button>
             </div>
