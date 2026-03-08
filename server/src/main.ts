@@ -18,6 +18,8 @@ async function bootstrap() {
         'https://plus-drive-f5p7.vercel.app', // Your Live Frontend
         'http://localhost:5173',               // Local development
         'http://localhost:3000',
+        'http://168.231.115.171',              // ✅ ADDED: Your Hostinger VPS IP
+        // 'https://your-custom-domain.com',   // Un-comment this when you get a domain
       ];
 
       // Allow if origin is in the list, is a Vercel preview, or is local (no origin)
